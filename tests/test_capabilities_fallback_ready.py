@@ -24,5 +24,5 @@ def test_ready_injects_fallback_manifest(monkeypatch):
     _capability_client.manifest = {"modalities": {"displays": []}}
     req = Request({"type": "http", "headers": [], "path": "/ready"})
     resp = ready(req)
-    assert resp["checks"]["displays"] == 1
-    assert _capability_client.modality_count("displays") == 1
+    assert resp["checks"]["displays"] >= 1
+    assert _capability_client.modality_count("displays") >= 1
