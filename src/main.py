@@ -35,8 +35,10 @@ def ready(request: Request):
     ready_flag = displays > 0 or not manifest_loaded
     # If probe failed, fall back to default display manifest
     if not manifest_loaded and displays == 0:
-        _capability_client.manifest = {"modalities": {"displays": [{"id": "default", "name": "fallback"}]}}
-        displays = 1
+        fallback = {"modalities": {"displays": [{"id": "default", "name": "fallback"}]}}
+        _capability_client.manifest = fallback
+        displays = _capability_client.modality_count("displays")
+        ready_flag = True
     return {
         "ready": ready_flag,
         "checks": {
