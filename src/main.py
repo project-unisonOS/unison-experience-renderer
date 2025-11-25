@@ -108,7 +108,7 @@ def companion_ui():
           body { font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(circle at 20% 20%, #0b1224, #050915 45%, #02060f 85%); color: #e2e8f0; display: flex; flex-direction: column; }
           .hud { position: fixed; top: 20px; left: 20px; display: flex; gap: 10px; z-index: 10; }
           .pill { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); padding: 6px 14px; border-radius: 999px; font-size: 12px; color: #cbd5e1; }
-          .canvas { flex: 1; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 2fr 1fr; gap: 12px; padding: 32px; box-sizing: border-box; }
+          .canvas { flex: 1; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 2fr 1fr 1fr; gap: 12px; padding: 32px; box-sizing: border-box; }
           .panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); overflow: hidden; display: flex; flex-direction: column; }
           .panel h2 { margin: 0 0 8px 0; font-size: 16px; letter-spacing: 0.3px; color: #c7d2fe; }
           .panel .content { flex: 1; border-radius: 12px; background: rgba(0,0,0,0.12); padding: 12px; overflow: auto; }
@@ -116,6 +116,10 @@ def companion_ui():
           video, audio, img { width: 100%; border-radius: 12px; background: #0f172a; }
           #chat-stream { line-height: 1.5; }
           #tool-activity { font-family: monospace; white-space: pre-wrap; }
+          .card { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); }
+          .card-header { font-weight: 700; margin-bottom: 6px; color: #cbd5e1; }
+          .card-body { font-size: 14px; color: #e2e8f0; line-height: 1.4; }
+          .card .media iframe, .card .media img, .card .media audio { width: 100%; border-radius: 10px; background: #0f172a; }
         </style>
       </head>
       <body>
@@ -142,12 +146,94 @@ def companion_ui():
             <h2>Tool Activity</h2>
             <div id="tool-activity" class="content">Idle</div>
           </div>
+          <div class="panel" style="grid-column: 1 / span 2;">
+            <h2>Priority Cards</h2>
+            <div id="cards" class="content">Loading…</div>
+          </div>
         </div>
         <script>
           const chatEl = document.getElementById('chat-stream');
           const toolsEl = document.getElementById('tool-activity');
           const personaEl = document.getElementById('persona');
           const statusEl = document.getElementById('status');
+          const cardsEl = document.getElementById('cards');
+          const DEFAULT_PERSON_ID = """ + json.dumps(_default_person_id) + """;
+          let evtSource;
+          function escapeHtml(str) {
+            return String(str)
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+          }
+          function safeMediaUrl(url, { embed=false } = {}) {
+            if (!url) return '';
+            try {
+              const u = new URL(url, window.location.origin);
+              if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+              const host = u.hostname.toLowerCase();
+              if (embed) {
+                // allowlist common embed hosts
+                if (host.includes('youtube.com') || host === 'youtu.be') {
+                  const id = u.searchParams.get('v') || u.pathname.split('/').pop();
+                  return id ? `https://www.youtube.com/embed/${id}` : '';
+                }
+                if (host.includes('vimeo.com')) {
+                  const id = u.pathname.split('/').filter(Boolean).pop();
+                  return id ? `https://player.vimeo.com/video/${id}` : '';
+                }
+              }
+              return u.href;
+            } catch (e) {
+              return '';
+            }
+          }
+          function setMediaSrc(elId, url, opts) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const safe = safeMediaUrl(url, opts);
+            el.src = safe || '';
+          }
+          function applyExperience(latest) {
+            personaEl.textContent = `Persona: ${latest.person_id || 'guest'}`;
+            statusEl.textContent = `Status: rendered ${new Date(latest.ts * 1000).toLocaleTimeString()}`;
+            chatEl.textContent = latest.text || 'No text yet';
+            toolsEl.textContent = latest.tool_activity || 'Idle';
+            setMediaSrc('img-slot', latest.image_url);
+            setMediaSrc('video-slot', latest.video_url);
+            setMediaSrc('audio-slot', latest.audio_url);
+            setMediaSrc('stream-slot', latest.stream_url);
+            if (Array.isArray(latest.cards)) {
+              cardsEl.innerHTML = latest.cards.map(c => renderCard(c)).join('');
+            }
+          }
+
+          function renderCard(card) {
+            const type = escapeHtml(card.type || 'summary');
+            const title = escapeHtml(card.title || type);
+            const body = escapeHtml(card.body || '');
+            let inner = '';
+            if (type === 'media.embed') {
+              const video = safeMediaUrl(card.video_url, { embed: true });
+              const image = safeMediaUrl(card.image_url);
+              const audio = safeMediaUrl(card.audio_url);
+              if (video) inner += `<div class="media"><iframe src="${video}" allowfullscreen frameborder="0"></iframe></div>`;
+              if (image) inner += `<div class="media"><img src="${image}" alt="image"/></div>`;
+              if (audio) inner += `<div class="media"><audio controls src="${audio}"></audio></div>`;
+            }
+            if (type === 'guide') {
+              const diagram = safeMediaUrl(card.diagram_url);
+              if (diagram) inner += `<div class="media"><img src="${diagram}" alt="diagram"/></div>`;
+              if (Array.isArray(card.steps)) inner += `<ol>${card.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>`;
+            }
+            if (type === 'tool_result' && Array.isArray(card.items)) {
+              inner += `<ul>${card.items.map(i => `<li><strong>${escapeHtml(i.title || '')}</strong>: ${escapeHtml(i.summary || '')}</li>`).join('')}</ul>`;
+            }
+            if (body) inner += `<p>${body}</p>`;
+            return `<div class="card"><div class="card-header">${title}</div><div class="card-body">${inner}</div></div>`;
+          }
+
           async function loadCapabilities() {
             try {
               const res = await fetch('/capabilities');
@@ -158,17 +244,6 @@ def companion_ui():
             } catch (e) {
               document.getElementById('displays').textContent = 'Fallback display';
             }
-          }
-          let evtSource;
-          function applyExperience(latest) {
-            personaEl.textContent = `Persona: ${latest.person_id || 'guest'}`;
-            statusEl.textContent = `Status: rendered ${new Date(latest.ts * 1000).toLocaleTimeString()}`;
-            chatEl.textContent = latest.text || 'No text yet';
-            toolsEl.textContent = latest.tool_activity || 'Idle';
-            if (latest.image_url) document.getElementById('img-slot').src = latest.image_url;
-            if (latest.video_url) document.getElementById('video-slot').src = latest.video_url;
-            if (latest.audio_url) document.getElementById('audio-slot').src = latest.audio_url;
-            if (latest.stream_url) document.getElementById('stream-slot').src = latest.stream_url;
           }
 
           async function loadExperiences() {
@@ -183,11 +258,13 @@ def companion_ui():
           }
           async function loadDashboard() {
             try {
-              const res = await fetch(`/dashboard?person_id=${encodeURIComponent(window.DEFAULT_PERSON_ID || '')}`);
+              const personId = new URLSearchParams(window.location.search).get('person_id') || window.DEFAULT_PERSON_ID || DEFAULT_PERSON_ID;
+              window.DEFAULT_PERSON_ID = personId;
+              const res = await fetch(`/dashboard?person_id=${encodeURIComponent(personId)}`);
               if (!res.ok) return;
               const data = await res.json();
               if (data.dashboard && Array.isArray(data.dashboard.cards)) {
-                applyExperience(data.dashboard.cards[0]);
+                cardsEl.innerHTML = data.dashboard.cards.map(c => renderCard(c)).join('');
               }
             } catch (e) {}
           }
