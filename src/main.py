@@ -2,6 +2,7 @@ import os
 import time
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
 try:
     from unison_common import BatonMiddleware
 except Exception:
@@ -61,3 +62,54 @@ def get_capabilities():
 def refresh_capabilities():
     manifest = _capability_client.refresh()
     return {"ok": manifest is not None}
+
+
+@app.get("/", response_class=HTMLResponse)
+def companion_ui():
+    """
+    Minimal companion display stub.
+    Shows manifest display count and placeholders for chat/tool activity.
+    """
+    return """
+    <html>
+      <head>
+        <title>Unison Companion</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 16px; }
+          .card { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+          .title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+          .subtitle { color: #94a3b8; margin-bottom: 12px; }
+          .pill { display: inline-block; background: #334155; color: #cbd5e1; padding: 4px 10px; border-radius: 999px; margin-right: 6px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="title">Unison Companion</div>
+          <div class="subtitle">Always-on chat + tool activity</div>
+          <div id="displays" class="pill">Loading displays…</div>
+        </div>
+        <div class="card">
+          <div class="title">Chat</div>
+          <div id="chat">Waiting for input…</div>
+        </div>
+        <div class="card">
+          <div class="title">Tool Activity</div>
+          <div id="tools">Idle</div>
+        </div>
+        <script>
+          async function loadCapabilities() {
+            try {
+              const res = await fetch('/capabilities');
+              if (!res.ok) { throw new Error('capabilities unavailable'); }
+              const data = await res.json();
+              const count = data.displays || (data.manifest && data.manifest.modalities && data.manifest.modalities.displays ? data.manifest.modalities.displays.length : 0);
+              document.getElementById('displays').textContent = `${count} display(s) ready`;
+            } catch (e) {
+              document.getElementById('displays').textContent = 'Fallback display';
+            }
+          }
+          loadCapabilities();
+        </script>
+      </body>
+    </html>
+    """
