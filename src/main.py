@@ -25,11 +25,14 @@ _experience_log_max = 50
 _experience_queue: asyncio.Queue = asyncio.Queue()
 _context_base = os.getenv("CONTEXT_BASE_URL", "http://context:8081")
 _default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-user")
+_test_mode = os.getenv("UNISON_UI_TEST_MODE", "false").lower() in {"1", "true", "yes", "on"}
 
 
 @app.on_event("startup")
 def _startup_refresh():
     _capability_client.refresh()
+    if _test_mode:
+        _seed_test_data()
 
 
 @app.get("/health")
@@ -246,3 +249,48 @@ async def stream_experiences():
             item = await _experience_queue.get()
             yield f"data: {json.dumps(item)}\\n\\n"
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+def _seed_test_data():
+    """Populate experiences/dashboard with test persona and cards for UI/dev testing."""
+    test_person = os.getenv("UNISON_TEST_PERSON_ID", "test-user")
+    sample_cards = [
+        {
+            "id": "card-1",
+            "type": "summary",
+            "title": "Morning Briefing",
+            "body": "3 meetings today. Standup at 9:00. Design review at 11:00.",
+            "tool_activity": "calendar.refresh",
+            "person_id": test_person,
+            "ts": time.time(),
+        },
+        {
+            "id": "card-2",
+            "type": "comms",
+            "title": "Priority Comms",
+            "body": "2 replies pending: product questions from Alex; budget from Jamie.",
+            "tool_activity": "comms.triage",
+            "person_id": test_person,
+            "ts": time.time(),
+        },
+        {
+            "id": "card-3",
+            "type": "tasks",
+            "title": "Today’s Tasks",
+            "body": "1) Draft project brief; 2) Send launch notes; 3) Confirm vendor.",
+            "person_id": test_person,
+            "ts": time.time(),
+        },
+    ]
+    _experience_log[:] = sample_cards[:_experience_log_max]
+    for card in sample_cards:
+        try:
+            _experience_queue.put_nowait(card)
+        except Exception:
+            pass
+    # Persist to context if available
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            client.post(f"{_context_base}/dashboard/{test_person}", json={"dashboard": {"cards": sample_cards}})
+    except Exception:
+        pass
