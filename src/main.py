@@ -2,6 +2,7 @@ import os
 import time
 import json
 import asyncio
+import httpx
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, Request, Body
@@ -22,6 +23,8 @@ _capability_client = CapabilityClient(CAPABILITIES_URL)
 _experience_log: List[Dict[str, Any]] = []
 _experience_log_max = 50
 _experience_queue: asyncio.Queue = asyncio.Queue()
+_context_base = os.getenv("CONTEXT_BASE_URL", "http://context:8081")
+_default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-user")
 
 
 @app.on_event("startup")
@@ -69,6 +72,23 @@ def get_capabilities():
 def refresh_capabilities():
     manifest = _capability_client.refresh()
     return {"ok": manifest is not None}
+
+
+@app.get("/dashboard")
+def get_dashboard(person_id: str | None = None):
+    pid = person_id or _default_person_id
+    if not pid:
+        raise HTTPException(status_code=400, detail="person_id required")
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.get(f"{_context_base}/dashboard/{pid}")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail="dashboard unavailable")
+            return resp.json()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="dashboard fetch failed")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -158,6 +178,16 @@ def companion_ui():
               }
             } catch (e) {}
           }
+          async function loadDashboard() {
+            try {
+              const res = await fetch(`/dashboard?person_id=${encodeURIComponent(window.DEFAULT_PERSON_ID || '')}`);
+              if (!res.ok) return;
+              const data = await res.json();
+              if (data.dashboard && Array.isArray(data.dashboard.cards)) {
+                applyExperience(data.dashboard.cards[0]);
+              }
+            } catch (e) {}
+          }
           function startStream() {
             try {
               evtSource = new EventSource('/experiences/stream');
@@ -168,6 +198,7 @@ def companion_ui():
           }
           loadCapabilities();
           loadExperiences();
+          loadDashboard();
           startStream();
         </script>
       </body>
@@ -189,6 +220,14 @@ def log_experience(body: Dict[str, Any] = Body(...)):
         _experience_queue.put_nowait(payload)
     except Exception:
         pass
+    # Persist to context dashboard if person_id present
+    person_id = payload.get("person_id")
+    if person_id:
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                client.post(f"{_context_base}/dashboard/{person_id}", json={"dashboard": {"cards": _experience_log[:10]}})
+        except Exception:
+            pass
     return {"ok": True, "stored": len(_experience_log)}
 
 
