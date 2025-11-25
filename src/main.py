@@ -1,10 +1,11 @@
 import os
 import time
 import json
+import asyncio
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, Request, Body
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 try:
     from unison_common import BatonMiddleware
@@ -20,6 +21,7 @@ CAPABILITIES_URL = os.getenv("ORCHESTRATOR_CAPABILITIES_URL", "http://orchestrat
 _capability_client = CapabilityClient(CAPABILITIES_URL)
 _experience_log: List[Dict[str, Any]] = []
 _experience_log_max = 50
+_experience_queue: asyncio.Queue = asyncio.Queue()
 
 
 @app.on_event("startup")
@@ -134,27 +136,39 @@ def companion_ui():
               document.getElementById('displays').textContent = 'Fallback display';
             }
           }
+          let evtSource;
+          function applyExperience(latest) {
+            personaEl.textContent = `Persona: ${latest.person_id || 'guest'}`;
+            statusEl.textContent = `Status: rendered ${new Date(latest.ts * 1000).toLocaleTimeString()}`;
+            chatEl.textContent = latest.text || 'No text yet';
+            toolsEl.textContent = latest.tool_activity || 'Idle';
+            if (latest.image_url) document.getElementById('img-slot').src = latest.image_url;
+            if (latest.video_url) document.getElementById('video-slot').src = latest.video_url;
+            if (latest.audio_url) document.getElementById('audio-slot').src = latest.audio_url;
+            if (latest.stream_url) document.getElementById('stream-slot').src = latest.stream_url;
+          }
+
           async function loadExperiences() {
             try {
               const res = await fetch('/experiences');
               if (!res.ok) return;
               const data = await res.json();
               if (Array.isArray(data.items) && data.items.length > 0) {
-                const latest = data.items[0];
-                personaEl.textContent = `Persona: ${latest.person_id || 'guest'}`;
-                statusEl.textContent = `Status: rendered ${new Date(latest.ts * 1000).toLocaleTimeString()}`;
-                chatEl.textContent = latest.text || 'No text yet';
-                toolsEl.textContent = latest.tool_activity || 'Idle';
-                if (latest.image_url) document.getElementById('img-slot').src = latest.image_url;
-                if (latest.video_url) document.getElementById('video-slot').src = latest.video_url;
-                if (latest.audio_url) document.getElementById('audio-slot').src = latest.audio_url;
-                if (latest.stream_url) document.getElementById('stream-slot').src = latest.stream_url;
+                applyExperience(data.items[0]);
               }
+            } catch (e) {}
+          }
+          function startStream() {
+            try {
+              evtSource = new EventSource('/experiences/stream');
+              evtSource.onmessage = (ev) => {
+                try { const data = JSON.parse(ev.data); applyExperience(data); } catch (_) {}
+              };
             } catch (e) {}
           }
           loadCapabilities();
           loadExperiences();
-          setInterval(loadExperiences, 5000);
+          startStream();
         </script>
       </body>
     </html>
@@ -171,9 +185,25 @@ def log_experience(body: Dict[str, Any] = Body(...)):
     payload["ts"] = time.time()
     _experience_log.insert(0, payload)
     del _experience_log[_experience_log_max:]
+    try:
+        _experience_queue.put_nowait(payload)
+    except Exception:
+        pass
     return {"ok": True, "stored": len(_experience_log)}
 
 
 @app.get("/experiences")
 def list_experiences():
     return {"items": _experience_log}
+
+
+@app.get("/experiences/stream")
+async def stream_experiences():
+    """
+    Server-sent events (SSE) stream of new experiences.
+    """
+    async def event_generator():
+        while True:
+            item = await _experience_queue.get()
+            yield f"data: {json.dumps(item)}\\n\\n"
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
