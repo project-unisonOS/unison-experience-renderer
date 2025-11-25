@@ -2,22 +2,23 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Basic tools for healthcheck
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Basic tools for healthcheck and VCS installs
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY unison-common/dist /unison-common/dist
-COPY unison-experience-renderer/requirements.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --no-deps /unison-common/dist/unison_common-0.1.0-py3-none-any.whl \
+    && pip install --no-cache-dir "opentelemetry-api==1.21.0" "opentelemetry-sdk==1.21.0" \
+        "opentelemetry-exporter-otlp==1.21.0" "opentelemetry-exporter-jaeger==1.21.0" \
+        "opentelemetry-propagator-b3==1.21.0" "opentelemetry-propagator-jaeger==1.21.0" \
+        "opentelemetry-instrumentation-fastapi==0.42b0" "opentelemetry-instrumentation-httpx==0.42b0" \
+    && pip install --no-cache-dir "git+https://github.com/project-unisonOS/unison-common.git@main" \
     && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir bleach==6.3.0 jsonschema python-jose[cryptography] PyNaCl redis \
-        opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp opentelemetry-exporter-jaeger \
-        opentelemetry-propagator-b3 opentelemetry-propagator-jaeger opentelemetry-instrumentation-fastapi \
-        opentelemetry-instrumentation-httpx
+    && pip install --no-cache-dir bleach==6.3.0 jsonschema python-jose[cryptography] PyNaCl redis pytest
 
-COPY unison-experience-renderer/src ./src
-COPY unison-common/src/unison_common ./src/unison_common
+COPY src ./src
+COPY tests ./tests
 
 ENV PYTHONPATH=/app/src
 
