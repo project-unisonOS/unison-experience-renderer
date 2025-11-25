@@ -1,8 +1,11 @@
 import os
 import time
+import json
+from typing import Any, Dict, List
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse
+
 try:
     from unison_common import BatonMiddleware
 except Exception:
@@ -15,6 +18,8 @@ if BatonMiddleware:
 _started = time.time()
 CAPABILITIES_URL = os.getenv("ORCHESTRATOR_CAPABILITIES_URL", "http://orchestrator:8080/capabilities")
 _capability_client = CapabilityClient(CAPABILITIES_URL)
+_experience_log: List[Dict[str, Any]] = []
+_experience_log_max = 50
 
 
 @app.on_event("startup")
@@ -67,36 +72,57 @@ def refresh_capabilities():
 @app.get("/", response_class=HTMLResponse)
 def companion_ui():
     """
-    Minimal companion display stub.
-    Shows manifest display count and placeholders for chat/tool activity.
+    Full-screen canvas for AI-driven experiences, informed by persona/preferences.
     """
     return """
     <html>
       <head>
         <title>Unison Companion</title>
         <style>
-          body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 16px; }
-          .card { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
-          .title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-          .subtitle { color: #94a3b8; margin-bottom: 12px; }
-          .pill { display: inline-block; background: #334155; color: #cbd5e1; padding: 4px 10px; border-radius: 999px; margin-right: 6px; font-size: 12px; }
+          html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+          body { font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(circle at 20% 20%, #0b1224, #050915 45%, #02060f 85%); color: #e2e8f0; display: flex; flex-direction: column; }
+          .hud { position: fixed; top: 20px; left: 20px; display: flex; gap: 10px; z-index: 10; }
+          .pill { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); padding: 6px 14px; border-radius: 999px; font-size: 12px; color: #cbd5e1; }
+          .canvas { flex: 1; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 2fr 1fr; gap: 12px; padding: 32px; box-sizing: border-box; }
+          .panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); overflow: hidden; display: flex; flex-direction: column; }
+          .panel h2 { margin: 0 0 8px 0; font-size: 16px; letter-spacing: 0.3px; color: #c7d2fe; }
+          .panel .content { flex: 1; border-radius: 12px; background: rgba(0,0,0,0.12); padding: 12px; overflow: auto; }
+          .media-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+          video, audio, img { width: 100%; border-radius: 12px; background: #0f172a; }
+          #chat-stream { line-height: 1.5; }
+          #tool-activity { font-family: monospace; white-space: pre-wrap; }
         </style>
       </head>
       <body>
-        <div class="card">
-          <div class="title">Unison Companion</div>
-          <div class="subtitle">Always-on chat + tool activity</div>
-          <div id="displays" class="pill">Loading displays…</div>
+        <div class="hud">
+          <div id="displays" class="pill">Displays: loading…</div>
+          <div id="persona" class="pill">Persona: guest</div>
+          <div id="status" class="pill">Status: idle</div>
         </div>
-        <div class="card">
-          <div class="title">Chat</div>
-          <div id="chat">Waiting for input…</div>
-        </div>
-        <div class="card">
-          <div class="title">Tool Activity</div>
-          <div id="tools">Idle</div>
+        <div class="canvas">
+          <div class="panel" style="grid-row: 1 / span 2;">
+            <h2>Media Canvas</h2>
+            <div class="content media-grid">
+              <div id="media-image"><img id="img-slot" alt="image slot" /></div>
+              <div id="media-video"><video id="video-slot" controls></video></div>
+              <div id="media-audio"><audio id="audio-slot" controls></audio></div>
+              <div id="media-stream"><video id="stream-slot" autoplay muted></video></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Chat</h2>
+            <div id="chat-stream" class="content">Waiting for input…</div>
+          </div>
+          <div class="panel">
+            <h2>Tool Activity</h2>
+            <div id="tool-activity" class="content">Idle</div>
+          </div>
         </div>
         <script>
+          const chatEl = document.getElementById('chat-stream');
+          const toolsEl = document.getElementById('tool-activity');
+          const personaEl = document.getElementById('persona');
+          const statusEl = document.getElementById('status');
           async function loadCapabilities() {
             try {
               const res = await fetch('/capabilities');
@@ -108,8 +134,46 @@ def companion_ui():
               document.getElementById('displays').textContent = 'Fallback display';
             }
           }
+          async function loadExperiences() {
+            try {
+              const res = await fetch('/experiences');
+              if (!res.ok) return;
+              const data = await res.json();
+              if (Array.isArray(data.items) && data.items.length > 0) {
+                const latest = data.items[0];
+                personaEl.textContent = `Persona: ${latest.person_id || 'guest'}`;
+                statusEl.textContent = `Status: rendered ${new Date(latest.ts * 1000).toLocaleTimeString()}`;
+                chatEl.textContent = latest.text || 'No text yet';
+                toolsEl.textContent = latest.tool_activity || 'Idle';
+                if (latest.image_url) document.getElementById('img-slot').src = latest.image_url;
+                if (latest.video_url) document.getElementById('video-slot').src = latest.video_url;
+                if (latest.audio_url) document.getElementById('audio-slot').src = latest.audio_url;
+                if (latest.stream_url) document.getElementById('stream-slot').src = latest.stream_url;
+              }
+            } catch (e) {}
+          }
           loadCapabilities();
+          loadExperiences();
+          setInterval(loadExperiences, 5000);
         </script>
       </body>
     </html>
     """
+
+
+@app.post("/experiences")
+def log_experience(body: Dict[str, Any] = Body(...)):
+    """
+    Store a rendered experience for future resurfacing.
+    Body should include person_id, session_id, text, tool_activity, and media URLs.
+    """
+    payload = dict(body or {})
+    payload["ts"] = time.time()
+    _experience_log.insert(0, payload)
+    del _experience_log[_experience_log_max:]
+    return {"ok": True, "stored": len(_experience_log)}
+
+
+@app.get("/experiences")
+def list_experiences():
+    return {"items": _experience_log}
