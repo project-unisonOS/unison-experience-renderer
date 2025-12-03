@@ -25,3 +25,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OTEL_SDK_DISABLED=true python -m pytest
 - Consumes capability manifest from orchestrator.
 - Reads wakeword/profile data from `unison-context`.
 - Exposed through devstack and consumed by `unison-agent-vdi` or browser clients.
+
+## Docs
+
+Full docs at https://project-unisonos.github.io
