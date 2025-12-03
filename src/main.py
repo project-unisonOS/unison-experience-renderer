@@ -43,6 +43,7 @@ _porcupine_access_key = os.getenv("PORCUPINE_ACCESS_KEY") or ""
 _porcupine_keyword_b64 = os.getenv("PORCUPINE_KEYWORD_BASE64") or ""
 _default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-user")
 _test_mode = os.getenv("UNISON_UI_TEST_MODE", "false").lower() in {"1", "true", "yes", "on"}
+_always_on_mic = os.getenv("UNISON_ALWAYS_ON_MIC", "false").lower() in {"1", "true", "yes", "on"}
 
 
 @app.on_event("startup")
@@ -290,6 +291,7 @@ def companion_ui():
           const SPEECH_BASE = """ + json.dumps(_speech_base) + """;
           let wakeword = """ + json.dumps(_wakeword_default) + """;
           const PORCUPINE_ENABLED = !!(""" + ("True" if _porcupine_access_key and _porcupine_keyword_b64 else "False") + """);
+          const ALWAYS_ON_MIC = """ + ("true" if _always_on_mic else "false") + """;
           let evtSource;
           let sessionId = localStorage.getItem('unison_session_id') || crypto.randomUUID();
           localStorage.setItem('unison_session_id', sessionId);
@@ -657,7 +659,11 @@ def companion_ui():
           loadCapabilities();
           loadExperiences();
           loadDashboard();
+          refreshWakeword();
           startStream();
+          if (ALWAYS_ON_MIC === 'true') {
+            startMic();
+          }
         </script>
       </body>
     </html>
