@@ -203,7 +203,8 @@ def companion_ui():
         <title>Unison Companion</title>
         <style>
           html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-          body { font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(circle at 20% 20%, #0b1224, #050915 45%, #02060f 85%); color: #e2e8f0; display: flex; flex-direction: column; }
+          :root { --unison-text-scale: 1; }
+          body { font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(circle at 20% 20%, #0b1224, #050915 45%, #02060f 85%); color: #e2e8f0; display: flex; flex-direction: column; font-size: calc(16px * var(--unison-text-scale)); }
           .hud { position: fixed; top: 20px; left: 20px; display: flex; gap: 10px; z-index: 10; }
           .pill { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); padding: 6px 14px; border-radius: 999px; font-size: 12px; color: #cbd5e1; }
           .pill-button { cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease; }
@@ -220,6 +221,9 @@ def companion_ui():
           .card-header { font-weight: 700; margin-bottom: 6px; color: #cbd5e1; }
           .card-body { font-size: 14px; color: #e2e8f0; line-height: 1.4; }
           .card .media iframe, .card .media img, .card .media audio { width: 100%; border-radius: 10px; background: #0f172a; }
+          body.dashboard-contrast-high { background: #020617; color: #f9fafb; }
+          body.dashboard-contrast-high .panel { background: rgba(15,23,42,0.96); border-color: rgba(248,250,252,0.25); }
+          body.dashboard-contrast-high .card { background: rgba(15,23,42,0.98); border-color: rgba(248,250,252,0.35); }
         </style>
         <script type="module">
           // Porcupine loader (browser-only, optional)
@@ -422,6 +426,27 @@ def companion_ui():
               const data = await res.json();
               if (data.dashboard && Array.isArray(data.dashboard.cards)) {
                 cardsEl.innerHTML = data.dashboard.cards.map(c => renderCard(c)).join('');
+              }
+              const prefs = data.dashboard && typeof data.dashboard.preferences === 'object' ? data.dashboard.preferences : null;
+              if (prefs) {
+                const rootStyle = document.documentElement.style;
+                // Basic text scale preference; accept numeric or simple named values.
+                let scale = prefs.text_scale;
+                if (typeof scale === 'string') {
+                  const lowered = scale.toLowerCase();
+                  if (lowered === 'small') scale = 0.9;
+                  else if (lowered === 'large') scale = 1.1;
+                }
+                if (typeof scale === 'number' && isFinite(scale)) {
+                  const clamped = Math.min(1.4, Math.max(0.8, scale));
+                  rootStyle.setProperty('--unison-text-scale', String(clamped));
+                }
+                const contrast = typeof prefs.contrast === 'string' ? prefs.contrast.toLowerCase() : null;
+                if (contrast === 'high') {
+                  document.body.classList.add('dashboard-contrast-high');
+                } else if (contrast === 'normal' || contrast === 'default') {
+                  document.body.classList.remove('dashboard-contrast-high');
+                }
               }
             } catch (e) {}
           }
@@ -646,7 +671,8 @@ def log_experience(body: Dict[str, Any] = Body(...)):
     Body should include person_id, session_id, text, tool_activity, and media URLs.
     """
     payload = dict(body or {})
-    payload["ts"] = time.time()
+    # Preserve an explicit timestamp if provided; otherwise stamp now.
+    payload.setdefault("ts", time.time())
     _experience_log.insert(0, payload)
     del _experience_log[_experience_log_max:]
     try:
