@@ -489,7 +489,7 @@ def companion_ui():
               }
             } catch (e) {}
           }
-          async function loadDashboard() {
+          async function loadDashboard(skipPrefs = false) {
             try {
               const personId = new URLSearchParams(window.location.search).get('person_id') || window.DEFAULT_PERSON_ID || DEFAULT_PERSON_ID;
               window.DEFAULT_PERSON_ID = personId;
@@ -500,25 +500,27 @@ def companion_ui():
                 cardsEl.innerHTML = data.dashboard.cards.map(c => renderCard(c)).join('');
                 renderUnisonCards(data.dashboard.cards);
               }
-              const prefs = data.dashboard && typeof data.dashboard.preferences === 'object' ? data.dashboard.preferences : null;
-              if (prefs) {
-                const rootStyle = document.documentElement.style;
-                // Basic text scale preference; accept numeric or simple named values.
-                let scale = prefs.text_scale;
-                if (typeof scale === 'string') {
-                  const lowered = scale.toLowerCase();
-                  if (lowered === 'small') scale = 0.9;
-                  else if (lowered === 'large') scale = 1.1;
-                }
-                if (typeof scale === 'number' && isFinite(scale)) {
-                  const clamped = Math.min(1.4, Math.max(0.8, scale));
-                  rootStyle.setProperty('--unison-text-scale', String(clamped));
-                }
-                const contrast = typeof prefs.contrast === 'string' ? prefs.contrast.toLowerCase() : null;
-                if (contrast === 'high') {
-                  document.body.classList.add('dashboard-contrast-high');
-                } else if (contrast === 'normal' || contrast === 'default') {
-                  document.body.classList.remove('dashboard-contrast-high');
+              if (!skipPrefs) {
+                const prefs = data.dashboard && typeof data.dashboard.preferences === 'object' ? data.dashboard.preferences : null;
+                if (prefs) {
+                  const rootStyle = document.documentElement.style;
+                  // Basic text scale preference; accept numeric or simple named values.
+                  let scale = prefs.text_scale;
+                  if (typeof scale === 'string') {
+                    const lowered = scale.toLowerCase();
+                    if (lowered === 'small') scale = 0.9;
+                    else if (lowered === 'large') scale = 1.1;
+                  }
+                  if (typeof scale === 'number' && isFinite(scale)) {
+                    const clamped = Math.min(1.4, Math.max(0.8, scale));
+                    rootStyle.setProperty('--unison-text-scale', String(clamped));
+                  }
+                  const contrast = typeof prefs.contrast === 'string' ? prefs.contrast.toLowerCase() : null;
+                  if (contrast === 'high') {
+                    document.body.classList.add('dashboard-contrast-high');
+                  } else if (contrast === 'normal' || contrast === 'default') {
+                    document.body.classList.remove('dashboard-contrast-high');
+                  }
                 }
               }
             } catch (e) {}
@@ -732,6 +734,8 @@ def companion_ui():
           loadDashboard();
           refreshWakeword();
           startStream();
+          // Periodically refresh dashboard/shared space to surface new comms/unison cards.
+          setInterval(() => loadDashboard(true), 15000);
           if (ALWAYS_ON_MIC === 'true') {
             startMic();
           }
