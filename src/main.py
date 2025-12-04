@@ -301,8 +301,12 @@ def companion_ui():
             <div id="tool-activity" class="content">Idle</div>
           </div>
           <div class="panel" style="grid-column: 1 / span 2;">
-            <h2>Priority Cards</h2>
-            <div id="cards" class="content">Loading…</div>
+            <h2 id="cards-heading">Priority Cards</h2>
+            <div id="cards" class="content" role="region" aria-label="Priority cards" aria-live="polite">Loading…</div>
+          </div>
+          <div class="panel" style="grid-column: 1 / span 2;">
+            <h2 id="unison-cards-heading">Unison Shared Space</h2>
+            <div id="unison-cards" class="content" role="region" aria-label="Unison shared space" aria-live="polite">Loading…</div>
           </div>
         </div>
         <script>
@@ -311,6 +315,7 @@ def companion_ui():
           const personaEl = document.getElementById('persona');
           const statusEl = document.getElementById('status');
           const cardsEl = document.getElementById('cards');
+          const unisonCardsEl = document.getElementById('unison-cards');
           const micStatusEl = document.getElementById('mic-status');
           const micToggleEl = document.getElementById('mic-toggle');
           const micMuteEl = document.getElementById('mic-mute');
@@ -417,6 +422,7 @@ def companion_ui():
             setMediaSrc('stream-slot', latest.stream_url);
             if (Array.isArray(latest.cards)) {
               cardsEl.innerHTML = latest.cards.map(c => renderCard(c)).join('');
+              renderUnisonCards(latest.cards);
             }
           }
 
@@ -451,6 +457,16 @@ def companion_ui():
             </div>`;
           }
 
+          function renderUnisonCards(cards) {
+            if (!unisonCardsEl) return;
+            const unisonOnly = Array.isArray(cards) ? cards.filter(c => Array.isArray(c.tags) && c.tags.includes('unison')) : [];
+            if (!unisonOnly.length) {
+              unisonCardsEl.innerHTML = 'No shared messages yet.';
+              return;
+            }
+            unisonCardsEl.innerHTML = unisonOnly.map(c => renderCard(c)).join('');
+          }
+
           async function loadCapabilities() {
             try {
               const res = await fetch('/capabilities');
@@ -482,6 +498,7 @@ def companion_ui():
               const data = await res.json();
               if (data.dashboard && Array.isArray(data.dashboard.cards)) {
                 cardsEl.innerHTML = data.dashboard.cards.map(c => renderCard(c)).join('');
+                renderUnisonCards(data.dashboard.cards);
               }
               const prefs = data.dashboard && typeof data.dashboard.preferences === 'object' ? data.dashboard.preferences : null;
               if (prefs) {
