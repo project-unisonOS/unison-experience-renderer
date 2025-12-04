@@ -38,6 +38,7 @@ _context_role = os.getenv("UNISON_CONTEXT_ROLE", "service")
 _context_headers = {"x-test-role": _context_role} if _context_role else {}
 _speech_base = os.getenv("SPEECH_BASE_URL", "http://unison-io-speech:8084")
 _orchestrator_base = os.getenv("ORCHESTRATOR_BASE_URL", "http://orchestrator:8080")
+_intent_graph_base = os.getenv("INTENT_GRAPH_BASE_URL", "http://intent-graph:8080")
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
 _porcupine_access_key = os.getenv("PORCUPINE_ACCESS_KEY") or ""
 _porcupine_keyword_b64 = os.getenv("PORCUPINE_KEYWORD_BASE64") or ""
@@ -106,6 +107,32 @@ def get_wakeword(person_id: str | None = None):
     except Exception:
         pass
     return {"wakeword": wakeword, "person_id": pid}
+
+
+@app.post("/gesture/select")
+def gesture_select(body: Dict[str, Any] = Body(...)):
+    """Receive a simple card selection gesture and forward to intent-graph."""
+    card_id = body.get("card_id")
+    card_title = body.get("card_title")
+    person_id = body.get("person_id") or _default_person_id
+    if not isinstance(card_id, str) or not card_id:
+        raise HTTPException(status_code=400, detail="card_id required")
+    payload = {
+        "person_id": person_id,
+        "card_id": card_id,
+        "card_title": str(card_title) if card_title is not None else "",
+        "ts": time.time(),
+        "source": "renderer",
+    }
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.post(f"{_intent_graph_base}/gesture/select", json=payload)
+            # Best-effort: if intent-graph is unavailable, do not crash the UI.
+            if resp.status_code >= 500:
+                return {"ok": False, "forwarded": False}
+    except Exception:
+        return {"ok": False, "forwarded": False}
+    return {"ok": True, "forwarded": True}
 
 
 @app.post("/capabilities/refresh")
@@ -245,7 +272,8 @@ def companion_ui():
         </script>
       </head>
       <body>
-        <div class="hud">
+        <a href="#main-content" class="pill" style="position:absolute;left:-999px;top:-999px;">Skip to main content</a>
+        <div class="hud" role="status" aria-live="polite">
           <div id="displays" class="pill">Displays: loading…</div>
           <div id="persona" class="pill">Persona: guest</div>
           <div id="status" class="pill">Status: idle</div>
@@ -254,7 +282,7 @@ def companion_ui():
           <button id="mic-mute" class="pill pill-button" type="button">Mute Audio</button>
           <button id="mic-stop-audio" class="pill pill-button" type="button">Stop Audio</button>
         </div>
-        <div class="canvas">
+        <div id="main-content" class="canvas" role="main">
           <div class="panel" style="grid-row: 1 / span 2;">
             <h2>Media Canvas</h2>
             <div class="content media-grid">
@@ -265,7 +293,7 @@ def companion_ui():
             </div>
           </div>
           <div class="panel">
-            <h2>Chat</h2>
+            <h2 id="chat-heading">Chat</h2>
             <div id="chat-stream" class="content">Waiting for input…</div>
           </div>
           <div class="panel">
@@ -306,6 +334,26 @@ def companion_ui():
           let audioMuted = false;
           let wakeDetector = new WakewordDetector(wakeword);
           let porcupine = null;
+          cardsEl.addEventListener('click', async (event) => {
+            const target = event.target.closest('.card');
+            if (!target) return;
+            const cardId = target.getAttribute('data-card-id') || '';
+            const cardTitle = target.getAttribute('data-card-title') || '';
+            if (!cardId) return;
+            try {
+              await fetch('/gesture/select', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  card_id: cardId,
+                  card_title: cardTitle,
+                  person_id: DEFAULT_PERSON_ID,
+                }),
+              });
+            } catch (e) {
+              // best-effort; ignore errors
+            }
+          });
           function escapeHtml(str) {
             return String(str)
               .replace(/&/g, '&amp;')
@@ -394,7 +442,9 @@ def companion_ui():
               inner += `<ul>${card.items.map(i => `<li><strong>${escapeHtml(i.title || '')}</strong>: ${escapeHtml(i.summary || '')}</li>`).join('')}</ul>`;
             }
             if (body) inner += `<p>${body}</p>`;
-            return `<div class="card"><div class="card-header">${title}</div><div class="card-body">${inner}</div></div>`;
+            const cardIdRaw = card.id || card.key || title;
+            const cardId = escapeHtml(String(cardIdRaw || title));
+            return `<div class="card" data-card-id="${cardId}" data-card-title="${title}"><div class="card-header">${title}</div><div class="card-body">${inner}</div></div>`;
           }
 
           async function loadCapabilities() {

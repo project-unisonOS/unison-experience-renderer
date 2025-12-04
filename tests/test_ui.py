@@ -17,3 +17,6 @@ def test_root_renders_ui():
     text = resp.text.lower()
     assert "unison companion" in text
     assert "tool activity" in text
+    # Basic accessibility landmarks
+    assert 'role="main"' in resp.text or "role='main'" in resp.text
+    assert "chat-heading" in resp.text

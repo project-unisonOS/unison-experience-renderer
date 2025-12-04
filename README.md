@@ -25,6 +25,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OTEL_SDK_DISABLED=true python -m pytest
 - Consumes capability manifest from orchestrator.
 - Reads wakeword/profile data from `unison-context`.
 - Exposed through devstack and consumed by `unison-agent-vdi` or browser clients.
+- For touch/gesture, card selections on the dashboard are forwarded as `gesture.select` events to `unison-intent-graph`.
 
 ## Docs
 
