@@ -424,6 +424,7 @@ def companion_ui():
             const type = escapeHtml(card.type || 'summary');
             const title = escapeHtml(card.title || type);
             const body = escapeHtml(card.body || '');
+            const tags = Array.isArray(card.tags) ? card.tags : [];
             let inner = '';
             if (type === 'media.embed') {
               const video = safeMediaUrl(card.video_url, { embed: true });
@@ -444,7 +445,10 @@ def companion_ui():
             if (body) inner += `<p>${body}</p>`;
             const cardIdRaw = card.id || card.key || title;
             const cardId = escapeHtml(String(cardIdRaw || title));
-            return `<div class="card" data-card-id="${cardId}" data-card-title="${title}"><div class="card-header">${title}</div><div class="card-body">${inner}</div></div>`;
+            return `<div class="card" data-card-id="${cardId}" data-card-title="${title}">
+              <div class="card-header">${title}${tags.length ? ` <span style="font-size:11px;opacity:0.7">(${tags.join(', ')})</span>` : ''}</div>
+              <div class="card-body">${inner}</div>
+            </div>`;
           }
 
           async function loadCapabilities() {
