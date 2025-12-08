@@ -45,6 +45,8 @@ _porcupine_keyword_b64 = os.getenv("PORCUPINE_KEYWORD_BASE64") or ""
 _default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-user")
 _test_mode = os.getenv("UNISON_UI_TEST_MODE", "false").lower() in {"1", "true", "yes", "on"}
 _always_on_mic = os.getenv("UNISON_ALWAYS_ON_MIC", "false").lower() in {"1", "true", "yes", "on"}
+_actuation_log: List[Dict[str, Any]] = []
+_actuation_log_max = 50
 
 
 @app.on_event("startup")
@@ -326,6 +328,7 @@ def companion_ui():
           const PORCUPINE_ENABLED = !!(""" + ("True" if _porcupine_access_key and _porcupine_keyword_b64 else "False") + """);
           const ALWAYS_ON_MIC = """ + ("true" if _always_on_mic else "false") + """;
           let evtSource;
+          let unisonEvtSource;
           let sessionId = localStorage.getItem('unison_session_id') || crypto.randomUUID();
           localStorage.setItem('unison_session_id', sessionId);
           let micStream = null;
@@ -729,11 +732,36 @@ def companion_ui():
               };
             } catch (e) {}
           }
+          function startUnisonStream() {
+            try {
+              unisonEvtSource = new EventSource('/comms/unison/stream');
+              unisonEvtSource.onmessage = (ev) => {
+                try {
+                  const data = JSON.parse(ev.data);
+                  if (data && Array.isArray(data.messages)) {
+                    const cards = data.messages.map(m => ({
+                      id: m.message_id,
+                      type: 'summary',
+                      title: m.subject || 'Unison message',
+                      body: m.body || '',
+                      tags: m.context_tags || ['comms','unison'],
+                      origin_intent: 'comms.unison.stream',
+                    }));
+                    const existingCards = unisonCardsEl.dataset.cards ? JSON.parse(unisonCardsEl.dataset.cards) : [];
+                    const merged = [...existingCards, ...cards].slice(-20);
+                    unisonCardsEl.dataset.cards = JSON.stringify(merged);
+                    unisonCardsEl.innerHTML = merged.map(c => renderCard(c)).join('');
+                  }
+                } catch (err) {}
+              };
+            } catch (e) {}
+          }
           loadCapabilities();
           loadExperiences();
           loadDashboard();
           refreshWakeword();
           startStream();
+          startUnisonStream();
           // Periodically refresh dashboard/shared space to surface new comms/unison cards.
           setInterval(() => loadDashboard(true), 15000);
           if (ALWAYS_ON_MIC === 'true') {
@@ -778,6 +806,25 @@ def log_experience(body: Dict[str, Any] = Body(...)):
 @app.get("/experiences")
 def list_experiences():
     return {"items": _experience_log}
+
+@app.post("/telemetry/actuation")
+def actuation_telemetry(event: Dict[str, Any] = Body(...)):
+    """Accept actuation lifecycle events and surface them to the renderer queue."""
+    evt = dict(event or {})
+    evt.setdefault("ts", time.time())
+    evt.setdefault("type", "actuation")
+    _actuation_log.insert(0, evt)
+    del _actuation_log[_actuation_log_max:]
+    try:
+        _experience_queue.put_nowait({"type": "actuation", **evt})
+    except Exception:
+        pass
+    return {"ok": True, "stored": len(_actuation_log)}
+
+
+@app.get("/telemetry/actuation")
+def list_actuation_telemetry():
+    return {"items": _actuation_log}
 
 
 @app.get("/experiences/stream")
