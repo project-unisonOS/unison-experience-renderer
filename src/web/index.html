@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UnisonOS Renderer</title>
+    <style>
+      :root {
+        --field-bg: #000;
+        --field-fg: rgba(255, 255, 255, 0.92);
+        --muted-fg: rgba(255, 255, 255, 0.7);
+        --ease-organic: cubic-bezier(0.22, 1, 0.36, 1);
+        --ease-soft: cubic-bezier(0.2, 0, 0, 1);
+        --dur-fast: 180ms;
+        --dur-med: 420ms;
+        --dur-slow: 900ms;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--field-bg);
+        color: var(--field-fg);
+        overflow: hidden;
+      }
+
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+      }
+
+      main#field {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background: var(--field-bg);
+      }
+
+      main#field[data-motion="depthEmergence"] .glyph {
+        filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.18));
+      }
+
+      main#field[data-motion="drift"] .glyph.on {
+        transform: translate3d(0, -10px, 0) scale(1);
+      }
+
+      .center {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+      }
+
+      .glyph {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.92);
+        filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.14));
+        opacity: 0;
+        transform: translate3d(0, 0, 0) scale(0.96);
+        transition: opacity var(--dur-med) var(--ease-organic), transform var(--dur-med) var(--ease-organic);
+      }
+
+      .glyph.on {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+
+      .glyph.presence-cue {
+        opacity: 0.1;
+        animation: presenceBreath 4.2s var(--ease-organic) infinite;
+      }
+
+      @keyframes presenceBreath {
+        0% { opacity: 0.06; transform: translate3d(0, 0, 0) scale(0.96); }
+        55% { opacity: 0.14; transform: translate3d(0, 0, 0) scale(1.06); }
+        100% { opacity: 0.06; transform: translate3d(0, 0, 0) scale(0.96); }
+      }
+
+      .question {
+        max-width: min(72ch, 86vw);
+        text-align: center;
+        letter-spacing: 0.1px;
+        font-size: clamp(16px, 2.2vw, 22px);
+        line-height: 1.35;
+        color: var(--field-fg);
+        opacity: 0;
+        transform: translate3d(0, 10px, 0);
+        transition: opacity var(--dur-med) var(--ease-soft), transform var(--dur-med) var(--ease-organic);
+      }
+
+      .question.on {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+
+      .quiet-label {
+        position: absolute;
+        bottom: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        letter-spacing: 0.24px;
+        color: var(--muted-fg);
+        opacity: 0;
+        transition: opacity var(--dur-med) var(--ease-soft);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .glyph,
+        .question {
+          transition: none;
+        }
+        .glyph.presence-cue {
+          animation: none;
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="field" role="main" data-scene="presence">
+      <div class="center" aria-hidden="true">
+        <div id="glyph" class="glyph"></div>
+        <div id="question" class="question"></div>
+      </div>
+      <div id="quietLabel" class="quiet-label" aria-hidden="true"></div>
+    </main>
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>

@@ -2,49 +2,50 @@ import os
 import time
 import json
 import asyncio
-import httpx
+from pathlib import Path
 from typing import Any, Dict, List
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, Body
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 try:
     from unison_common import BatonMiddleware
 except Exception:
     BatonMiddleware = None
 from unison_common.multimodal import CapabilityClient
-try:
-    from wakeword import WakewordDetector, detectWakeWord  # type: ignore
-except Exception:  # pragma: no cover
-    # Fallback stub if module isn't importable (tests)
-    class WakewordDetector:  # type: ignore
-        def __init__(self, keyword="unison", threshold=0.9): self.keyword = keyword
-        def setKeyword(self, keyword): self.keyword = keyword
-        def processFrame(self, pcm): return False
-    def detectWakeWord(detector, pcm): return False
 
 app = FastAPI(title="unison-experience-renderer")
+
 _disable_auth = os.getenv("DISABLE_AUTH_FOR_TESTS", "false").lower() in {"1", "true", "yes", "on"}
 if BatonMiddleware and not _disable_auth:
     app.add_middleware(BatonMiddleware)
+
 _started = time.time()
+_here = Path(__file__).resolve().parent
+_web_root = _here / "web"
+app.mount("/static", StaticFiles(directory=str(_web_root), html=False), name="static")
+
 CAPABILITIES_URL = os.getenv("ORCHESTRATOR_CAPABILITIES_URL", "http://orchestrator:8080/capabilities")
 _capability_client = CapabilityClient(CAPABILITIES_URL)
-_experience_log: List[Dict[str, Any]] = []
-_experience_log_max = 50
-_experience_queue: asyncio.Queue = asyncio.Queue()
+
 _context_base = os.getenv("CONTEXT_BASE_URL", "http://context:8081")
 _context_role = os.getenv("UNISON_CONTEXT_ROLE", "service")
 _context_headers = {"x-test-role": _context_role} if _context_role else {}
+
 _speech_base = os.getenv("SPEECH_BASE_URL", "http://unison-io-speech:8084")
 _orchestrator_base = os.getenv("ORCHESTRATOR_BASE_URL", "http://orchestrator:8080")
-_intent_graph_base = os.getenv("INTENT_GRAPH_BASE_URL", "http://intent-graph:8080")
+
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
-_porcupine_access_key = os.getenv("PORCUPINE_ACCESS_KEY") or ""
-_porcupine_keyword_b64 = os.getenv("PORCUPINE_KEYWORD_BASE64") or ""
-_default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-user")
-_test_mode = os.getenv("UNISON_UI_TEST_MODE", "false").lower() in {"1", "true", "yes", "on"}
-_always_on_mic = os.getenv("UNISON_ALWAYS_ON_MIC", "false").lower() in {"1", "true", "yes", "on"}
+_default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-person")
+
+_test_mode = os.getenv("UNISON_RENDERER_TEST_MODE", os.getenv("UNISON_UI_TEST_MODE", "false")).lower() in {"1", "true", "yes", "on"}
+
+_event_log: List[Dict[str, Any]] = []
+_event_log_max = 50
+_event_queue: asyncio.Queue = asyncio.Queue()
+
 _actuation_log: List[Dict[str, Any]] = []
 _actuation_log_max = 50
 
@@ -54,6 +55,11 @@ def _startup_refresh():
     _capability_client.refresh()
     if _test_mode:
         _seed_test_data()
+
+
+@app.get("/", response_class=FileResponse)
+def renderer_surface():
+    return FileResponse(str(_web_root / "index.html"))
 
 
 @app.get("/health")
@@ -66,7 +72,6 @@ def health(request: Request):
 def ready(request: Request):
     manifest_loaded = bool(_capability_client.manifest)
     displays = _capability_client.modality_count("displays")
-    # Fall back to 1 display if manifest is missing or empty
     ready_flag = displays > 0 or not manifest_loaded
     if displays == 0:
         fallback = {"modalities": {"displays": [{"id": "default", "name": "fallback"}]}}
@@ -91,6 +96,12 @@ def get_capabilities():
     return {"manifest": manifest, "displays": _capability_client.modality_count("displays")}
 
 
+@app.post("/capabilities/refresh")
+def refresh_capabilities():
+    manifest = _capability_client.refresh()
+    return {"ok": manifest is not None}
+
+
 @app.get("/wakeword")
 def get_wakeword(person_id: str | None = None):
     """Fetch the active wake word from context profile; fallback to default."""
@@ -109,38 +120,6 @@ def get_wakeword(person_id: str | None = None):
     except Exception:
         pass
     return {"wakeword": wakeword, "person_id": pid}
-
-
-@app.post("/gesture/select")
-def gesture_select(body: Dict[str, Any] = Body(...)):
-    """Receive a simple card selection gesture and forward to intent-graph."""
-    card_id = body.get("card_id")
-    card_title = body.get("card_title")
-    person_id = body.get("person_id") or _default_person_id
-    if not isinstance(card_id, str) or not card_id:
-        raise HTTPException(status_code=400, detail="card_id required")
-    payload = {
-        "person_id": person_id,
-        "card_id": card_id,
-        "card_title": str(card_title) if card_title is not None else "",
-        "ts": time.time(),
-        "source": "renderer",
-    }
-    try:
-        with httpx.Client(timeout=2.0) as client:
-            resp = client.post(f"{_intent_graph_base}/gesture/select", json=payload)
-            # Best-effort: if intent-graph is unavailable, do not crash the UI.
-            if resp.status_code >= 500:
-                return {"ok": False, "forwarded": False}
-    except Exception:
-        return {"ok": False, "forwarded": False}
-    return {"ok": True, "forwarded": True}
-
-
-@app.post("/capabilities/refresh")
-def refresh_capabilities():
-    manifest = _capability_client.refresh()
-    return {"ok": manifest is not None}
 
 
 @app.post("/speech/stt")
@@ -167,23 +146,6 @@ def proxy_speech_stt(request: Request, body: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=502, detail="speech service unavailable")
 
 
-@app.get("/dashboard")
-def get_dashboard(person_id: str | None = None):
-    pid = person_id or _default_person_id
-    if not pid:
-        raise HTTPException(status_code=400, detail="person_id required")
-    try:
-        with httpx.Client(timeout=2.0) as client:
-            resp = client.get(f"{_context_base}/dashboard/{pid}", headers=_context_headers or None)
-            if resp.status_code != 200:
-                raise HTTPException(status_code=resp.status_code, detail="dashboard unavailable")
-            return resp.json()
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=503, detail="dashboard fetch failed")
-
-
 @app.post("/payments/approvals")
 def record_payment_approval(body: Dict[str, Any] = Body(...)):
     """Capture a payment approval intent for renderer-driven flows."""
@@ -194,20 +156,18 @@ def record_payment_approval(body: Dict[str, Any] = Body(...)):
         "surface": body.get("surface"),
         "timestamp": time.time(),
     }
-    _experience_log.append({"type": "payment_approval", **approval})
-    if len(_experience_log) > _experience_log_max:
-        _experience_log.pop(0)
+    envelope = {"type": "payment.approval", "payload": approval, "ts": time.time()}
+    _record_envelope(envelope)
     return {"ok": True, "approval": approval}
 
 
 @app.get("/payments/transactions/{txn_id}")
 def get_payment_status(txn_id: str, person_id: str | None = None):
-    """Proxy payment status from orchestrator for UI display."""
+    """Proxy payment status from orchestrator for renderer consumption."""
     pid = person_id or _default_person_id
-    headers = {}
     try:
         with httpx.Client(timeout=3.0) as client:
-            resp = client.get(f"{_orchestrator_base}/payments/transactions/{txn_id}", headers=headers or None)
+            resp = client.get(f"{_orchestrator_base}/payments/transactions/{txn_id}")
             if resp.status_code != 200:
                 raise HTTPException(status_code=resp.status_code, detail="payment status unavailable")
             body = resp.json()
@@ -216,609 +176,42 @@ def get_payment_status(txn_id: str, person_id: str | None = None):
     except Exception:
         raise HTTPException(status_code=502, detail="orchestrator unavailable")
     txn = body.get("transaction") or {}
-    _experience_log.append({"type": "payment_status", "person_id": pid, "transaction": txn, "timestamp": time.time()})
-    if len(_experience_log) > _experience_log_max:
-        _experience_log.pop(0)
+    envelope = {"type": "payment.status", "payload": {"person_id": pid, "transaction": txn, "timestamp": time.time()}, "ts": time.time()}
+    _record_envelope(envelope)
     return {"ok": True, "transaction": txn}
 
 
-@app.get("/", response_class=HTMLResponse)
-def companion_ui():
-    """
-    Full-screen canvas for AI-driven experiences, informed by persona/preferences.
-    """
-    return """
-    <html>
-      <head>
-        <title>Unison Companion</title>
-        <style>
-          html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-          :root { --unison-text-scale: 1; }
-          body { font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(circle at 20% 20%, #0b1224, #050915 45%, #02060f 85%); color: #e2e8f0; display: flex; flex-direction: column; font-size: calc(16px * var(--unison-text-scale)); }
-          .hud { position: fixed; top: 20px; left: 20px; display: flex; gap: 10px; z-index: 10; }
-          .pill { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); padding: 6px 14px; border-radius: 999px; font-size: 12px; color: #cbd5e1; }
-          .pill-button { cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease; }
-          .pill-button:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.16); }
-          .canvas { flex: 1; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 2fr 1fr 1fr; gap: 12px; padding: 32px; box-sizing: border-box; }
-          .panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; box-shadow: 0 8px 28px rgba(0,0,0,0.35); overflow: hidden; display: flex; flex-direction: column; }
-          .panel h2 { margin: 0 0 8px 0; font-size: 16px; letter-spacing: 0.3px; color: #c7d2fe; }
-          .panel .content { flex: 1; border-radius: 12px; background: rgba(0,0,0,0.12); padding: 12px; overflow: auto; }
-          .media-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-          video, audio, img { width: 100%; border-radius: 12px; background: #0f172a; }
-          #chat-stream { line-height: 1.5; }
-          #tool-activity { font-family: monospace; white-space: pre-wrap; }
-          .card { border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: rgba(255,255,255,0.03); }
-          .card-header { font-weight: 700; margin-bottom: 6px; color: #cbd5e1; }
-          .card-body { font-size: 14px; color: #e2e8f0; line-height: 1.4; }
-          .card .media iframe, .card .media img, .card .media audio { width: 100%; border-radius: 10px; background: #0f172a; }
-          body.dashboard-contrast-high { background: #020617; color: #f9fafb; }
-          body.dashboard-contrast-high .panel { background: rgba(15,23,42,0.96); border-color: rgba(248,250,252,0.25); }
-          body.dashboard-contrast-high .card { background: rgba(15,23,42,0.98); border-color: rgba(248,250,252,0.35); }
-        </style>
-        <script type="module">
-          // Porcupine loader (browser-only, optional)
-          const ACCESS_KEY = """ + json.dumps(_porcupine_access_key) + """;
-          const KEYWORD_B64 = """ + json.dumps(_porcupine_keyword_b64) + """;
-          window.__porcupineLoader = async () => {
-            if (!ACCESS_KEY || !KEYWORD_B64) return null;
-            try {
-              const { PorcupineWeb } = await import("https://cdn.jsdelivr.net/npm/@picovoice/porcupine-web@2.2.2/dist/porcupine-web.esm.js");
-              const keyword = { label: "wakeword", base64: KEYWORD_B64 };
-              const engine = await PorcupineWeb.create(ACCESS_KEY, keyword);
-              return engine;
-            } catch (e) {
-              console.warn("Porcupine load failed", e);
-              return null;
-            }
-          };
-        </script>
-      </head>
-      <body>
-        <a href="#main-content" class="pill" style="position:absolute;left:-999px;top:-999px;">Skip to main content</a>
-        <div class="hud" role="status" aria-live="polite">
-          <div id="displays" class="pill">Displays: loading…</div>
-          <div id="persona" class="pill">Persona: guest</div>
-          <div id="status" class="pill">Status: idle</div>
-          <div id="mic-status" class="pill">Mic: idle</div>
-          <button id="mic-toggle" class="pill pill-button" type="button">Start Mic</button>
-          <button id="mic-mute" class="pill pill-button" type="button">Mute Audio</button>
-          <button id="mic-stop-audio" class="pill pill-button" type="button">Stop Audio</button>
-        </div>
-        <div id="main-content" class="canvas" role="main">
-          <div class="panel" style="grid-row: 1 / span 2;">
-            <h2>Media Canvas</h2>
-            <div class="content media-grid">
-              <div id="media-image"><img id="img-slot" alt="image slot" /></div>
-              <div id="media-video"><video id="video-slot" controls></video></div>
-              <div id="media-audio"><audio id="audio-slot" controls></audio></div>
-              <div id="media-stream"><video id="stream-slot" autoplay muted></video></div>
-            </div>
-          </div>
-          <div class="panel">
-            <h2 id="chat-heading">Chat</h2>
-            <div id="chat-stream" class="content">Waiting for input…</div>
-          </div>
-          <div class="panel">
-            <h2>Tool Activity</h2>
-            <div id="tool-activity" class="content">Idle</div>
-          </div>
-          <div class="panel" style="grid-column: 1 / span 2;">
-            <h2 id="cards-heading">Priority Cards</h2>
-            <div id="cards" class="content" role="region" aria-label="Priority cards" aria-live="polite">Loading…</div>
-          </div>
-          <div class="panel" style="grid-column: 1 / span 2;">
-            <h2 id="unison-cards-heading">Unison Shared Space</h2>
-            <div id="unison-cards" class="content" role="region" aria-label="Unison shared space" aria-live="polite">Loading…</div>
-          </div>
-        </div>
-        <script>
-          const chatEl = document.getElementById('chat-stream');
-          const toolsEl = document.getElementById('tool-activity');
-          const personaEl = document.getElementById('persona');
-          const statusEl = document.getElementById('status');
-          const cardsEl = document.getElementById('cards');
-          const unisonCardsEl = document.getElementById('unison-cards');
-          const micStatusEl = document.getElementById('mic-status');
-          const micToggleEl = document.getElementById('mic-toggle');
-          const micMuteEl = document.getElementById('mic-mute');
-          const micStopAudioEl = document.getElementById('mic-stop-audio');
-          const DEFAULT_PERSON_ID = """ + json.dumps(_default_person_id) + """;
-          const SPEECH_BASE = """ + json.dumps(_speech_base) + """;
-          let wakeword = """ + json.dumps(_wakeword_default) + """;
-          const PORCUPINE_ENABLED = !!(""" + ("True" if _porcupine_access_key and _porcupine_keyword_b64 else "False") + """);
-          const ALWAYS_ON_MIC = """ + ("true" if _always_on_mic else "false") + """;
-          let evtSource;
-          let unisonEvtSource;
-          let sessionId = localStorage.getItem('unison_session_id') || crypto.randomUUID();
-          localStorage.setItem('unison_session_id', sessionId);
-          let micStream = null;
-          let mediaRecorder = null;
-          let audioChunks = [];
-          let analyser = null;
-          let vadActive = false;
-          let silenceMs = 0;
-          const vadConfig = { start: 0.02, stop: 0.01, maxSilenceMs: 600, frameMs: 80 };
-          let playQueue = [];
-          let audioMuted = false;
-          let wakeDetector = new WakewordDetector(wakeword);
-          let porcupine = null;
-          cardsEl.addEventListener('click', async (event) => {
-            const target = event.target.closest('.card');
-            if (!target) return;
-            const cardId = target.getAttribute('data-card-id') || '';
-            const cardTitle = target.getAttribute('data-card-title') || '';
-            if (!cardId) return;
-            try {
-              await fetch('/gesture/select', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  card_id: cardId,
-                  card_title: cardTitle,
-                  person_id: DEFAULT_PERSON_ID,
-                }),
-              });
-            } catch (e) {
-              // best-effort; ignore errors
-            }
-          });
-          function escapeHtml(str) {
-            return String(str)
-              .replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#39;');
-          }
-          function safeMediaUrl(url, { embed=false } = {}) {
-            if (!url) return '';
-            try {
-              const u = new URL(url, window.location.origin);
-              if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
-              const host = u.hostname.toLowerCase();
-              if (embed) {
-                // allowlist common embed hosts
-                if (host.includes('youtube.com') || host === 'youtu.be') {
-                  const id = u.searchParams.get('v') || u.pathname.split('/').pop();
-                  return id ? `https://www.youtube.com/embed/${id}` : '';
-                }
-                if (host.includes('vimeo.com')) {
-                  const id = u.pathname.split('/').filter(Boolean).pop();
-                  return id ? `https://player.vimeo.com/video/${id}` : '';
-                }
-              }
-              return u.href;
-            } catch (e) {
-              return '';
-            }
-          }
-          function setMediaSrc(elId, url, opts) {
-            const el = document.getElementById(elId);
-            if (!el) return;
-            const safe = safeMediaUrl(url, opts);
-            el.src = safe || '';
-          }
-          function applyExperience(latest) {
-            personaEl.textContent = `Persona: ${latest.person_id || 'guest'}`;
-            statusEl.textContent = `Status: rendered ${new Date(latest.ts * 1000).toLocaleTimeString()}`;
-            chatEl.textContent = latest.text || 'No text yet';
-            toolsEl.textContent = latest.tool_activity || 'Idle';
-            setMediaSrc('img-slot', latest.image_url);
-            setMediaSrc('video-slot', latest.video_url);
-            setMediaSrc('audio-slot', latest.audio_url);
-            const audioEl = document.getElementById('audio-slot');
-            if (audioEl && latest.audio_url) {
-              playQueue.push(latest.audio_url);
-              if (!audioEl.src || audioEl.ended) {
-                const next = playQueue.shift();
-                audioEl.src = next || '';
-                audioEl.muted = audioMuted;
-                audioEl.play().catch(() => {});
-                audioEl.onended = () => {
-                  if (playQueue.length) {
-                    audioEl.src = playQueue.shift();
-                    audioEl.play().catch(() => {});
-                  }
-                };
-              }
-            }
-            setMediaSrc('stream-slot', latest.stream_url);
-            if (Array.isArray(latest.cards)) {
-              cardsEl.innerHTML = latest.cards.map(c => renderCard(c)).join('');
-              renderUnisonCards(latest.cards);
-            }
-          }
-
-          function renderCard(card) {
-            const type = escapeHtml(card.type || 'summary');
-            const title = escapeHtml(card.title || type);
-            const body = escapeHtml(card.body || '');
-            const tags = Array.isArray(card.tags) ? card.tags : [];
-            let inner = '';
-            if (type === 'media.embed') {
-              const video = safeMediaUrl(card.video_url, { embed: true });
-              const image = safeMediaUrl(card.image_url);
-              const audio = safeMediaUrl(card.audio_url);
-              if (video) inner += `<div class="media"><iframe src="${video}" allowfullscreen frameborder="0"></iframe></div>`;
-              if (image) inner += `<div class="media"><img src="${image}" alt="image"/></div>`;
-              if (audio) inner += `<div class="media"><audio controls src="${audio}"></audio></div>`;
-            }
-            if (type === 'guide') {
-              const diagram = safeMediaUrl(card.diagram_url);
-              if (diagram) inner += `<div class="media"><img src="${diagram}" alt="diagram"/></div>`;
-              if (Array.isArray(card.steps)) inner += `<ol>${card.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>`;
-            }
-            if (type === 'tool_result' && Array.isArray(card.items)) {
-              inner += `<ul>${card.items.map(i => `<li><strong>${escapeHtml(i.title || '')}</strong>: ${escapeHtml(i.summary || '')}</li>`).join('')}</ul>`;
-            }
-            if (body) inner += `<p>${body}</p>`;
-            const cardIdRaw = card.id || card.key || title;
-            const cardId = escapeHtml(String(cardIdRaw || title));
-            return `<div class="card" data-card-id="${cardId}" data-card-title="${title}">
-              <div class="card-header">${title}${tags.length ? ` <span style="font-size:11px;opacity:0.7">(${tags.join(', ')})</span>` : ''}</div>
-              <div class="card-body">${inner}</div>
-            </div>`;
-          }
-
-          function renderUnisonCards(cards) {
-            if (!unisonCardsEl) return;
-            const unisonOnly = Array.isArray(cards) ? cards.filter(c => Array.isArray(c.tags) && c.tags.includes('unison')) : [];
-            if (!unisonOnly.length) {
-              unisonCardsEl.innerHTML = 'No shared messages yet.';
-              return;
-            }
-            unisonCardsEl.innerHTML = unisonOnly.map(c => renderCard(c)).join('');
-          }
-
-          async function loadCapabilities() {
-            try {
-              const res = await fetch('/capabilities');
-              if (!res.ok) { throw new Error('capabilities unavailable'); }
-              const data = await res.json();
-              const count = data.displays || (data.manifest && data.manifest.modalities && data.manifest.modalities.displays ? data.manifest.modalities.displays.length : 0);
-              document.getElementById('displays').textContent = `${count} display(s) ready`;
-            } catch (e) {
-              document.getElementById('displays').textContent = 'Fallback display';
-            }
-          }
-
-          async function loadExperiences() {
-            try {
-              const res = await fetch('/experiences');
-              if (!res.ok) return;
-              const data = await res.json();
-              if (Array.isArray(data.items) && data.items.length > 0) {
-                applyExperience(data.items[0]);
-              }
-            } catch (e) {}
-          }
-          async function loadDashboard(skipPrefs = false) {
-            try {
-              const personId = new URLSearchParams(window.location.search).get('person_id') || window.DEFAULT_PERSON_ID || DEFAULT_PERSON_ID;
-              window.DEFAULT_PERSON_ID = personId;
-              const res = await fetch(`/dashboard?person_id=${encodeURIComponent(personId)}`);
-              if (!res.ok) return;
-              const data = await res.json();
-              if (data.dashboard && Array.isArray(data.dashboard.cards)) {
-                cardsEl.innerHTML = data.dashboard.cards.map(c => renderCard(c)).join('');
-                renderUnisonCards(data.dashboard.cards);
-              }
-              if (!skipPrefs) {
-                const prefs = data.dashboard && typeof data.dashboard.preferences === 'object' ? data.dashboard.preferences : null;
-                if (prefs) {
-                  const rootStyle = document.documentElement.style;
-                  // Basic text scale preference; accept numeric or simple named values.
-                  let scale = prefs.text_scale;
-                  if (typeof scale === 'string') {
-                    const lowered = scale.toLowerCase();
-                    if (lowered === 'small') scale = 0.9;
-                    else if (lowered === 'large') scale = 1.1;
-                  }
-                  if (typeof scale === 'number' && isFinite(scale)) {
-                    const clamped = Math.min(1.4, Math.max(0.8, scale));
-                    rootStyle.setProperty('--unison-text-scale', String(clamped));
-                  }
-                  const contrast = typeof prefs.contrast === 'string' ? prefs.contrast.toLowerCase() : null;
-                  if (contrast === 'high') {
-                    document.body.classList.add('dashboard-contrast-high');
-                  } else if (contrast === 'normal' || contrast === 'default') {
-                    document.body.classList.remove('dashboard-contrast-high');
-                  }
-                }
-              }
-            } catch (e) {}
-          }
-
-          async function refreshWakeword() {
-            const personId = new URLSearchParams(window.location.search).get('person_id') || window.DEFAULT_PERSON_ID || DEFAULT_PERSON_ID;
-            try {
-              const res = await fetch(`/wakeword?person_id=${encodeURIComponent(personId)}`);
-              if (res.ok) {
-                const data = await res.json();
-                if (data.wakeword) {
-                  wakeword = data.wakeword;
-                  wakeDetector.setKeyword(wakeword);
-                  micStatusEl.textContent = `Mic: wake word "${wakeword}"`;
-                }
-              }
-            } catch (e) {}
-          }
-
-          async function blobToBase64(blob) {
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result.split(',')[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-          }
-
-          async function sendAudioBlob(blob) {
-            const b64 = await blobToBase64(blob);
-            const personId = new URLSearchParams(window.location.search).get('person_id') || window.DEFAULT_PERSON_ID || DEFAULT_PERSON_ID;
-            const payload = { audio: b64, person_id: personId, session_id: sessionId };
-            micStatusEl.textContent = 'Mic: transcribing…';
-            try {
-              const res = await fetch('/speech/stt', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-              });
-              if (res.ok) {
-                const data = await res.json();
-                const t = data.transcript || '(no transcript)';
-                chatEl.textContent = t;
-                statusEl.textContent = `Status: transcribed @ ${new Date().toLocaleTimeString()}`;
-              } else {
-                micStatusEl.textContent = `Mic: STT error (${res.status})`;
-                chatEl.textContent = 'Speech-to-text failed. Try again or type.';
-              }
-            } catch (e) {
-              micStatusEl.textContent = 'Mic: STT failed';
-              chatEl.textContent = 'Speech-to-text unavailable. Try again or type.';
-            }
-          }
-
-          function stopRecording(send = true) {
-            if (!mediaRecorder) return;
-            const chunks = audioChunks.slice();
-            mediaRecorder.onstop = () => {
-              mediaRecorder = null;
-              if (send && chunks.length) {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
-                sendAudioBlob(blob);
-              }
-              audioChunks = [];
-            };
-            try { mediaRecorder.stop(); } catch (_) {}
-          }
-
-          function startRecording() {
-            if (!micStream) return;
-            if (mediaRecorder && mediaRecorder.state === 'recording') return;
-            audioChunks = [];
-            mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
-            mediaRecorder.ondataavailable = (evt) => {
-              if (evt.data && evt.data.size > 0) audioChunks.push(evt.data);
-            };
-            mediaRecorder.start();
-            micStatusEl.textContent = 'Mic: recording…';
-          }
-
-          function analyseLoop() {
-            if (!analyser || !vadActive) return;
-            const data = new Uint8Array(analyser.fftSize);
-            analyser.getByteTimeDomainData(data);
-            let sum = 0;
-            for (let i = 0; i < data.length; i++) {
-              const v = (data[i] - 128) / 128;
-              sum += v * v;
-            }
-            const rms = Math.sqrt(sum / data.length);
-            if (!mediaRecorder && rms > vadConfig.start) {
-              silenceMs = 0;
-              startRecording();
-            } else if (mediaRecorder) {
-              if (rms < vadConfig.stop) {
-                silenceMs += vadConfig.frameMs;
-                if (silenceMs >= vadConfig.maxSilenceMs) {
-                  stopRecording(true);
-                  micStatusEl.textContent = 'Mic: listening…';
-                }
-              } else {
-                silenceMs = 0;
-              }
-            }
-            // Wake-word detection
-            const pcm = new Float32Array(data.length);
-            for (let i = 0; i < data.length; i++) {
-              pcm[i] = (data[i] - 128) / 128;
-            }
-            if (porcupine && typeof porcupine.process === 'function') {
-              // Downsample roughly to 16k by picking every 3rd sample (approx for 48k input)
-              const step = 3;
-              const downsized = new Int16Array(Math.floor(pcm.length / step));
-              for (let i = 0, j = 0; i < pcm.length && j < downsized.length; i += step, j++) {
-                let v = pcm[i];
-                v = Math.max(-1, Math.min(1, v));
-                downsized[j] = v * 32767;
-              }
-              try {
-                const keywordIndex = porcupine.process(downsized);
-                if (keywordIndex !== -1 && !mediaRecorder) {
-                  micStatusEl.textContent = `Wake word "${wakeword}" detected`;
-                  startRecording();
-                }
-              } catch (e) {
-                // ignore processing errors to avoid UI spam
-              }
-            } else if (wakeDetector && typeof wakeDetector.processFrame === 'function') {
-              const triggered = wakeDetector.processFrame(pcm);
-              if (triggered && !mediaRecorder) {
-                micStatusEl.textContent = `Wake word "${wakeword}" detected`;
-                startRecording();
-              }
-            }
-            requestAnimationFrame(analyseLoop);
-          }
-
-          async function startMic() {
-            if (vadActive) return;
-            try {
-              micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-              const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-              const source = audioCtx.createMediaStreamSource(micStream);
-              analyser = audioCtx.createAnalyser();
-              analyser.fftSize = 2048;
-              source.connect(analyser);
-              if (PORCUPINE_ENABLED && window.__porcupineLoader) {
-                porcupine = await window.__porcupineLoader();
-                if (porcupine) micStatusEl.textContent = `Mic: wake word "${wakeword}" (porcupine)`;
-              }
-              vadActive = true;
-              micStatusEl.textContent = 'Mic: listening…';
-              micToggleEl.textContent = 'Stop Mic';
-              analyseLoop();
-            } catch (e) {
-              micStatusEl.textContent = 'Mic: permission denied';
-            }
-          }
-
-          function stopMic() {
-            vadActive = false;
-            stopRecording(false);
-            if (micStream) {
-              micStream.getTracks().forEach(t => t.stop());
-            }
-            micStream = null;
-            analyser = null;
-            micToggleEl.textContent = 'Start Mic';
-            micStatusEl.textContent = 'Mic: idle';
-          }
-
-          micToggleEl?.addEventListener('click', () => {
-            if (vadActive) {
-              stopMic();
-            } else {
-              startMic();
-            }
-          });
-
-          micMuteEl?.addEventListener('click', () => {
-            audioMuted = !audioMuted;
-            const audioEl = document.getElementById('audio-slot');
-            if (audioEl) audioEl.muted = audioMuted;
-            micMuteEl.textContent = audioMuted ? 'Unmute Audio' : 'Mute Audio';
-          });
-
-          micStopAudioEl?.addEventListener('click', () => {
-            const audioEl = document.getElementById('audio-slot');
-            playQueue = [];
-            if (audioEl) {
-              audioEl.pause();
-              audioEl.currentTime = 0;
-              audioEl.removeAttribute('src');
-            }
-          });
-
-          function startStream() {
-            try {
-              evtSource = new EventSource('/experiences/stream');
-              evtSource.onmessage = (ev) => {
-                try { const data = JSON.parse(ev.data); applyExperience(data); } catch (_) {}
-              };
-              evtSource.onerror = () => {
-                statusEl.textContent = 'Status: stream error (using cache)';
-              };
-            } catch (e) {}
-          }
-          function startUnisonStream() {
-            try {
-              unisonEvtSource = new EventSource('/comms/unison/stream');
-              unisonEvtSource.onmessage = (ev) => {
-                try {
-                  const data = JSON.parse(ev.data);
-                  if (data && Array.isArray(data.messages)) {
-                    const cards = data.messages.map(m => ({
-                      id: m.message_id,
-                      type: 'summary',
-                      title: m.subject || 'Unison message',
-                      body: m.body || '',
-                      tags: m.context_tags || ['comms','unison'],
-                      origin_intent: 'comms.unison.stream',
-                    }));
-                    const existingCards = unisonCardsEl.dataset.cards ? JSON.parse(unisonCardsEl.dataset.cards) : [];
-                    const merged = [...existingCards, ...cards].slice(-20);
-                    unisonCardsEl.dataset.cards = JSON.stringify(merged);
-                    unisonCardsEl.innerHTML = merged.map(c => renderCard(c)).join('');
-                  }
-                } catch (err) {}
-              };
-            } catch (e) {}
-          }
-          loadCapabilities();
-          loadExperiences();
-          loadDashboard();
-          refreshWakeword();
-          startStream();
-          startUnisonStream();
-          // Periodically refresh dashboard/shared space to surface new comms/unison cards.
-          setInterval(() => loadDashboard(true), 15000);
-          if (ALWAYS_ON_MIC === 'true') {
-            startMic();
-          }
-        </script>
-      </body>
-    </html>
-    """
-
-
+@app.post("/events")
 @app.post("/experiences")
-def log_experience(body: Dict[str, Any] = Body(...)):
+def ingest_event(body: Dict[str, Any] = Body(...)):
     """
-    Store a rendered experience for future resurfacing.
-    Body should include person_id, session_id, text, tool_activity, and media URLs.
+    Ingest an intent or experience envelope for composition on the renderer surface.
+
+    Supported shapes:
+    - Canonical envelope: {"type": "...", "payload": {...}, "urgency": "low|normal|high"}
+    - Legacy envelope: arbitrary JSON; the client composer applies a best-effort mapping.
     """
-    payload = dict(body or {})
-    # Preserve an explicit timestamp if provided; otherwise stamp now.
-    payload.setdefault("ts", time.time())
-    _experience_log.insert(0, payload)
-    del _experience_log[_experience_log_max:]
-    try:
-        _experience_queue.put_nowait(payload)
-    except Exception:
-        pass
-    # Persist to context dashboard if person_id present
-    person_id = payload.get("person_id")
-    if person_id:
-        try:
-            with httpx.Client(timeout=2.0) as client:
-                client.post(
-                    f"{_context_base}/dashboard/{person_id}",
-                    json={"dashboard": {"cards": _experience_log[:10]}},
-                    headers=_context_headers or None,
-                )
-        except Exception:
-            pass
-    return {"ok": True, "stored": len(_experience_log)}
+    envelope = dict(body or {})
+    envelope.setdefault("ts", time.time())
+    _record_envelope(envelope)
+    return {"ok": True, "stored": len(_event_log)}
 
 
+@app.get("/events")
 @app.get("/experiences")
-def list_experiences():
-    return {"items": _experience_log}
+def list_events():
+    return {"items": _event_log}
+
 
 @app.post("/telemetry/actuation")
 def actuation_telemetry(event: Dict[str, Any] = Body(...)):
-    """Accept actuation lifecycle events and surface them to the renderer queue."""
+    """Accept actuation lifecycle events and surface them to the renderer stream."""
     evt = dict(event or {})
     evt.setdefault("ts", time.time())
     evt.setdefault("type", "actuation")
     _actuation_log.insert(0, evt)
     del _actuation_log[_actuation_log_max:]
-    try:
-        _experience_queue.put_nowait({"type": "actuation", **evt})
-    except Exception:
-        pass
+    _record_envelope({"type": "actuation", "payload": evt, "ts": evt["ts"]})
     return {"ok": True, "stored": len(_actuation_log)}
 
 
@@ -827,62 +220,37 @@ def list_actuation_telemetry():
     return {"items": _actuation_log}
 
 
+@app.get("/events/stream")
 @app.get("/experiences/stream")
-async def stream_experiences():
-    """
-    Server-sent events (SSE) stream of new experiences.
-    """
+async def stream_events():
+    """Server-sent events (SSE) stream of incoming envelopes."""
+
     async def event_generator():
         while True:
-            item = await _experience_queue.get()
+            item = await _event_queue.get()
             yield f"data: {json.dumps(item)}\\n\\n"
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-def _seed_test_data():
-    """Populate experiences/dashboard with test persona and cards for UI/dev testing."""
-    test_person = os.getenv("UNISON_TEST_PERSON_ID", "test-user")
-    sample_cards = [
-        {
-            "id": "card-1",
-            "type": "summary",
-            "title": "Morning Briefing",
-            "body": "3 meetings today. Standup at 9:00. Design review at 11:00.",
-            "tool_activity": "calendar.refresh",
-            "person_id": test_person,
-            "ts": time.time(),
-        },
-        {
-            "id": "card-2",
-            "type": "comms",
-            "title": "Priority Comms",
-            "body": "2 replies pending: product questions from Alex; budget from Jamie.",
-            "tool_activity": "comms.triage",
-            "person_id": test_person,
-            "ts": time.time(),
-        },
-        {
-            "id": "card-3",
-            "type": "tasks",
-            "title": "Today’s Tasks",
-            "body": "1) Draft project brief; 2) Send launch notes; 3) Confirm vendor.",
-            "person_id": test_person,
-            "ts": time.time(),
-        },
-    ]
-    _experience_log[:] = sample_cards[:_experience_log_max]
-    for card in sample_cards:
-        try:
-            _experience_queue.put_nowait(card)
-        except Exception:
-            pass
-    # Persist to context if available
+def _record_envelope(envelope: Dict[str, Any]) -> None:
+    _event_log.insert(0, envelope)
+    del _event_log[_event_log_max:]
     try:
-        with httpx.Client(timeout=2.0) as client:
-            client.post(
-                f"{_context_base}/dashboard/{test_person}",
-                json={"dashboard": {"cards": sample_cards}},
-                headers=_context_headers or None,
-            )
+        _event_queue.put_nowait(envelope)
     except Exception:
         pass
+
+
+def _seed_test_data():
+    """Populate the stream with a small set of envelopes for local testing."""
+    test_person = os.getenv("UNISON_TEST_PERSON_ID", "test-person")
+    sample = [
+        {"type": "presence", "payload": {"person_id": test_person}, "ts": time.time()},
+        {"type": "intent.recognized", "payload": {"person_id": test_person}, "ts": time.time()},
+        {"type": "intent.clarify", "payload": {"text": "What outcome matters most right now?", "person_id": test_person}, "ts": time.time()},
+        {"type": "outcome.reflected", "payload": {"text": "Done.", "person_id": test_person}, "ts": time.time()},
+    ]
+    for envelope in sample:
+        _record_envelope(envelope)
+
