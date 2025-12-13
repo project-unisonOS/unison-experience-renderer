@@ -50,26 +50,28 @@ export function createComposer({ preferences }) {
       };
     }
 
+    if (type === "actuation") {
+      const lifecycle = payload && typeof payload.lifecycle === "string" ? payload.lifecycle : "";
+      const action = payload && typeof payload.action === "string" ? payload.action : "";
+      const status = payload && typeof payload.status === "string" ? payload.status : "";
+      const text = [action, lifecycle || status].filter(Boolean).join(" · ");
+      if (!text) return null;
+      return {
+        scene: createScene(SceneTypes.OUTCOME_REFLECTED, { text, holdMs: reduceMotion ? 0 : 780 }),
+        transition: createTransition(TransitionKinds.DRIFT, durationMs),
+        audio: null,
+        haptic: null,
+      };
+    }
+
     if (type === "rom.render") {
       const romPayload = payload && typeof payload === "object" ? payload : {};
       const blocks = Array.isArray(romPayload.blocks) ? romPayload.blocks : [];
       const textBlock = blocks.find((b) => b && typeof b === "object" && b.type === "text" && typeof b.text === "string");
-      const cardBlock = blocks.find((b) => b && typeof b === "object" && b.type === "card");
       const text = textBlock ? textBlock.text.trim() : "";
       if (text) {
         return {
           scene: createScene(SceneTypes.OUTCOME_REFLECTED, { text, holdMs: reduceMotion ? 0 : 780 }),
-          transition: createTransition(TransitionKinds.DRIFT, durationMs),
-          audio: { kind: "complete" },
-          haptic: { kind: "complete" },
-        };
-      }
-      if (cardBlock && typeof cardBlock.title === "string") {
-        const title = cardBlock.title.trim();
-        const body = typeof cardBlock.body === "string" ? cardBlock.body.trim() : "";
-        const combined = body ? `${title}: ${body}` : title;
-        return {
-          scene: createScene(SceneTypes.OUTCOME_REFLECTED, { text: combined, holdMs: reduceMotion ? 0 : 780 }),
           transition: createTransition(TransitionKinds.DRIFT, durationMs),
           audio: { kind: "complete" },
           haptic: { kind: "complete" },
