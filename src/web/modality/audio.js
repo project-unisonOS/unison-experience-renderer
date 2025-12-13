@@ -30,6 +30,7 @@ export function createAudioAdapter(preferences) {
 
   const presence = () => {
     if (!enabled) return;
+    // Audio contexts may require a gesture; fail silently.
     playTone(174.6, 120, 0.03);
     setTimeout(() => playTone(261.6, 140, 0.022), 70);
   };
@@ -55,4 +56,3 @@ export function createAudioAdapter(preferences) {
 
   return { presence, apply };
 }
-

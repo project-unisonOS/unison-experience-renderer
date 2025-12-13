@@ -13,16 +13,15 @@ This renderer assumes modality loss as normal: the screen may disappear; audio m
 
 ## Preferences model (current)
 
-Client-side preferences live in local storage:
+Preferences are sourced from the person’s context profile via the renderer `GET /preferences` endpoint (which proxies `unison-context` profile reads).
 
-- Key: `unison.renderer.preferences.v1`
-- Fields:
-  - `presenceCueVisual` (default `false`)
-  - `presenceCueAudio` (default `false`)
-  - `hapticCues` (default `false`)
-  - `reduceMotion` defaults from `prefers-reduced-motion`
+- Fields (all default off unless set in profile):
+  - `presenceCueVisual`
+  - `presenceCueAudio`
+  - `hapticCues`
+  - `reduceMotion` can be set in profile; otherwise defaults from `prefers-reduced-motion`
 
-Audio and haptic cues are off by default and require explicit enabling.
+Audio and haptic cues are off by default and require explicit enabling in profile.
 
 ## Screenless flows
 
@@ -37,4 +36,3 @@ The current built-in audio adapter is intentionally minimal and optional; it is 
 
 - Guardrail tests ensure forbidden UI metaphors do not reappear.
 - Reduced-motion is respected via the `prefers-reduced-motion` media query and the `reduceMotion` preference.
-

@@ -122,6 +122,28 @@ def get_wakeword(person_id: str | None = None):
     return {"wakeword": wakeword, "person_id": pid}
 
 
+@app.get("/preferences")
+def get_preferences(person_id: str | None = None):
+    """
+    Fetch renderer preferences from context profile.
+
+    This keeps preferences modality-independent and avoids local-only state.
+    """
+    pid = person_id or _default_person_id
+    prefs: Dict[str, Any] = {}
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.get(f"{_context_base}/profile/{pid}", headers=_context_headers or None)
+            if resp.status_code == 200:
+                body = resp.json() or {}
+                profile = body.get("profile") or {}
+                if isinstance(profile, dict):
+                    prefs = _extract_renderer_preferences(profile)
+    except Exception:
+        prefs = {}
+    return {"ok": True, "person_id": pid, "preferences": prefs}
+
+
 @app.post("/speech/stt")
 def proxy_speech_stt(request: Request, body: Dict[str, Any] = Body(...)):
     """Proxy mic audio to the speech STT service with baton propagation."""
@@ -254,3 +276,69 @@ def _seed_test_data():
     for envelope in sample:
         _record_envelope(envelope)
 
+
+def _extract_renderer_preferences(profile: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Best-effort normalization for context profile fields into renderer preferences.
+
+    Expected shapes (any may exist):
+    - profile["renderer"][<keys>]
+    - profile["preferences"]["renderer"][<keys>]
+    - profile["accessibility"][<keys>]
+    """
+    renderer = profile.get("renderer") if isinstance(profile.get("renderer"), dict) else {}
+    preferences = profile.get("preferences") if isinstance(profile.get("preferences"), dict) else {}
+    preferences_renderer = preferences.get("renderer") if isinstance(preferences.get("renderer"), dict) else {}
+    accessibility = profile.get("accessibility") if isinstance(profile.get("accessibility"), dict) else {}
+
+    def pick_bool(*values: Any) -> bool | None:
+        for v in values:
+            if isinstance(v, bool):
+                return v
+        return None
+
+    def pick_str(*values: Any) -> str | None:
+        for v in values:
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return None
+
+    presence_visual = pick_bool(
+        renderer.get("presenceCueVisual"),
+        renderer.get("presence_cue_visual"),
+        preferences_renderer.get("presenceCueVisual"),
+        preferences_renderer.get("presence_cue_visual"),
+    )
+    presence_audio = pick_bool(
+        renderer.get("presenceCueAudio"),
+        renderer.get("presence_cue_audio"),
+        preferences_renderer.get("presenceCueAudio"),
+        preferences_renderer.get("presence_cue_audio"),
+    )
+    haptic_cues = pick_bool(
+        renderer.get("hapticCues"),
+        renderer.get("haptic_cues"),
+        preferences_renderer.get("hapticCues"),
+        preferences_renderer.get("haptic_cues"),
+    )
+    reduce_motion = pick_bool(
+        accessibility.get("reduceMotion"),
+        accessibility.get("reduce_motion"),
+        accessibility.get("prefers_reduced_motion"),
+    )
+
+    out: Dict[str, Any] = {}
+    if presence_visual is not None:
+        out["presenceCueVisual"] = presence_visual
+    if presence_audio is not None:
+        out["presenceCueAudio"] = presence_audio
+    if haptic_cues is not None:
+        out["hapticCues"] = haptic_cues
+    if reduce_motion is not None:
+        out["reduceMotion"] = reduce_motion
+
+    contrast = pick_str(accessibility.get("contrast"), accessibility.get("visual_contrast"))
+    if contrast is not None:
+        out["contrast"] = contrast
+
+    return out

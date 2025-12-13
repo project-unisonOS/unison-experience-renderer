@@ -23,6 +23,7 @@ Canonical references (repo root):
 1. **Envelope ingress (server)**
    - `POST /events` (alias `POST /experiences`) accepts an envelope.
    - Envelopes are queued to `GET /events/stream` (alias `GET /experiences/stream`) via SSE.
+   - `GET /preferences` fetches preferences from context profile for modality cues and reduced motion.
 
 2. **Composition (client)**
    - `src/web/composer.js` maps an incoming envelope to a `(scene, transition)` plan.
@@ -60,4 +61,3 @@ A scene is a full-field perceptual state. Elements are ephemeral and semantic (g
 5. Update guardrail tests so the new scene cannot introduce forbidden metaphors.
 
 If a proposed change requires persistent containers, nav affordances, or framed regions, it is out of bounds for this renderer.
-
