@@ -36,7 +36,8 @@ def test_no_legacy_layout_terms_in_surface_sources():
 
 
 def test_no_person_as_user_language():
-    roots = [ROOT / "src", ROOT / "tests", ROOT / "README.md", ROOT / "ANTI_PATTERN_MAP.md"]
+    doc_files = [p for p in ROOT.glob("*.md") if p.name not in {"LICENSE"}]
+    roots = [ROOT / "src", ROOT / "tests", *doc_files]
     text = []
     for r in roots:
         if r.is_file():
@@ -59,4 +60,3 @@ def read_tree_text(root: pathlib.Path, extensions: set[str]) -> str:
             continue
         chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
     return "\n".join(chunks)
-
