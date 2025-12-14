@@ -43,6 +43,9 @@ class _DummyClient:
 def test_get_wakeword_prefers_profile_value(monkeypatch):
     dummy = _DummyClient()
     monkeypatch.setattr(main, "httpx", type("X", (), {"Client": lambda *a, **k: dummy}))
+    main._context_client = None
+    main._context_profile_cache.clear()
+    main._context_profile_cache_ts.clear()
     client = TestClient(main.app)
     resp = client.get("/wakeword?person_id=p1")
     assert resp.status_code == 200
@@ -67,6 +70,9 @@ def test_get_wakeword_falls_back_to_default_on_error(monkeypatch):
             raise RuntimeError("context unreachable")
 
     monkeypatch.setattr(main, "httpx", type("X", (), {"Client": lambda *a, **k: FailingClient()}))
+    main._context_client = None
+    main._context_profile_cache.clear()
+    main._context_profile_cache_ts.clear()
     # Ensure default is known for this test.
     os.environ["UNISON_WAKEWORD_DEFAULT"] = "unison"
     client = TestClient(main.app)
@@ -75,4 +81,3 @@ def test_get_wakeword_falls_back_to_default_on_error(monkeypatch):
     body = resp.json()
     # When context fails, we should still return the default wake word.
     assert body.get("wakeword") == "unison"
-

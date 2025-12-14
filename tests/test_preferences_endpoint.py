@@ -48,6 +48,9 @@ def test_preferences_proxy_normalizes_profile(monkeypatch):
         }
     )
     monkeypatch.setattr(main, "httpx", type("X", (), {"Client": lambda *a, **k: dummy}))
+    main._context_client = None
+    main._context_profile_cache.clear()
+    main._context_profile_cache_ts.clear()
     client = TestClient(main.app)
     resp = client.get("/preferences?person_id=p1")
     assert resp.status_code == 200
@@ -75,6 +78,9 @@ def test_preferences_returns_empty_on_context_error(monkeypatch):
             raise RuntimeError("context unreachable")
 
     monkeypatch.setattr(main, "httpx", type("X", (), {"Client": lambda *a, **k: FailingClient()}))
+    main._context_client = None
+    main._context_profile_cache.clear()
+    main._context_profile_cache_ts.clear()
     client = TestClient(main.app)
     resp = client.get("/preferences?person_id=someone")
     assert resp.status_code == 200
@@ -92,4 +98,3 @@ def test_extract_renderer_preferences_supports_nested_shapes():
         }
     )
     assert prefs == {"presenceCueAudio": True, "reduceMotion": True}
-

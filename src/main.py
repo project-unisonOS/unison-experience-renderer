@@ -33,6 +33,10 @@ _capability_client = CapabilityClient(CAPABILITIES_URL)
 _context_base = os.getenv("CONTEXT_BASE_URL", "http://context:8081")
 _context_role = os.getenv("UNISON_CONTEXT_ROLE", "service")
 _context_headers = {"x-test-role": _context_role} if _context_role else {}
+_context_profile_cache_seconds = float(os.getenv("RENDERER_CONTEXT_PROFILE_CACHE_SECONDS", "1.0"))
+_context_profile_cache: Dict[str, Dict[str, Any]] = {}
+_context_profile_cache_ts: Dict[str, float] = {}
+_context_client: httpx.Client | None = None
 
 _speech_base = os.getenv("SPEECH_BASE_URL", "http://unison-io-speech:8084")
 _orchestrator_base = os.getenv("ORCHESTRATOR_BASE_URL", "http://orchestrator:8080")
@@ -108,15 +112,11 @@ def get_wakeword(person_id: str | None = None):
     pid = person_id or _default_person_id
     wakeword = _wakeword_default
     try:
-        with httpx.Client(timeout=2.0) as client:
-            resp = client.get(f"{_context_base}/profile/{pid}", headers=_context_headers or None)
-            if resp.status_code == 200:
-                body = resp.json() or {}
-                profile = body.get("profile") or {}
-                voice = profile.get("voice") or {}
-                ww = voice.get("wakeword")
-                if isinstance(ww, str) and ww.strip():
-                    wakeword = ww.strip()
+        profile = _get_cached_profile(pid)
+        voice = profile.get("voice") or {}
+        ww = voice.get("wakeword")
+        if isinstance(ww, str) and ww.strip():
+            wakeword = ww.strip()
     except Exception:
         pass
     return {"wakeword": wakeword, "person_id": pid}
@@ -132,13 +132,9 @@ def get_preferences(person_id: str | None = None):
     pid = person_id or _default_person_id
     prefs: Dict[str, Any] = {}
     try:
-        with httpx.Client(timeout=2.0) as client:
-            resp = client.get(f"{_context_base}/profile/{pid}", headers=_context_headers or None)
-            if resp.status_code == 200:
-                body = resp.json() or {}
-                profile = body.get("profile") or {}
-                if isinstance(profile, dict):
-                    prefs = _extract_renderer_preferences(profile)
+        profile = _get_cached_profile(pid)
+        if isinstance(profile, dict):
+            prefs = _extract_renderer_preferences(profile)
     except Exception:
         prefs = {}
     return {"ok": True, "person_id": pid, "preferences": prefs}
@@ -342,3 +338,42 @@ def _extract_renderer_preferences(profile: Dict[str, Any]) -> Dict[str, Any]:
         out["contrast"] = contrast
 
     return out
+
+
+def _get_context_client() -> httpx.Client:
+    global _context_client
+    if _context_client is not None:
+        return _context_client
+    kwargs: Dict[str, Any] = {
+        "timeout": 2.0,
+        "headers": _context_headers or None,
+    }
+    limits_ctor = getattr(httpx, "Limits", None)
+    if limits_ctor:
+        kwargs["limits"] = limits_ctor(max_keepalive_connections=10, max_connections=20, keepalive_expiry=30.0)
+    _context_client = httpx.Client(**kwargs)
+    return _context_client
+
+
+def _get_cached_profile(person_id: str) -> Dict[str, Any]:
+    now = time.time()
+    cached = _context_profile_cache.get(person_id)
+    ts = _context_profile_cache_ts.get(person_id, 0.0)
+    if cached is not None and _context_profile_cache_seconds > 0 and (now - ts) <= _context_profile_cache_seconds:
+        return cached
+
+    profile: Dict[str, Any] = {}
+    try:
+        client = _get_context_client()
+        resp = client.get(f"{_context_base}/profile/{person_id}")
+        if resp.status_code == 200:
+            body = resp.json() or {}
+            p = body.get("profile")
+            if isinstance(p, dict):
+                profile = p
+    except Exception:
+        profile = cached or {}
+
+    _context_profile_cache[person_id] = profile
+    _context_profile_cache_ts[person_id] = now
+    return profile
