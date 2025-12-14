@@ -15,6 +15,7 @@ try:
 except Exception:
     BatonMiddleware = None
 from unison_common.multimodal import CapabilityClient
+from unison_common.redaction import redact_obj
 
 app = FastAPI(title="unison-experience-renderer")
 
@@ -210,6 +211,19 @@ def ingest_event(body: Dict[str, Any] = Body(...)):
     - Legacy envelope: arbitrary JSON; the client composer applies a best-effort mapping.
     """
     envelope = dict(body or {})
+    max_bytes = int(os.getenv("UNISON_RENDERER_MAX_ENVELOPE_BYTES", "0"))
+    if max_bytes > 0:
+        try:
+            if len(json.dumps(envelope, ensure_ascii=False).encode("utf-8")) > max_bytes:
+                raise HTTPException(status_code=413, detail="envelope_too_large")
+        except TypeError:
+            pass
+
+    if os.getenv("UNISON_REDACT_RENDERER_EVENTS", "true").lower() in {"1", "true", "yes", "on"}:
+        envelope = redact_obj(envelope)
+        envelope.setdefault("meta", {})
+        if isinstance(envelope["meta"], dict):
+            envelope["meta"]["redacted"] = True
     envelope.setdefault("ts", time.time())
     _record_envelope(envelope)
     return {"ok": True, "stored": len(_event_log)}
