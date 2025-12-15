@@ -136,8 +136,17 @@ export function createComposer({ preferences }) {
       const textBlock = blocks.find((b) => b && typeof b === "object" && b.type === "text" && typeof b.text === "string");
       const text = textBlock ? textBlock.text.trim() : "";
       if (text) {
+        const directives =
+          romPayload.meta && typeof romPayload.meta === "object" && romPayload.meta.renderer_directives && typeof romPayload.meta.renderer_directives === "object"
+            ? romPayload.meta.renderer_directives
+            : {};
+        const visualDensity =
+          typeof directives.visual_density === "string" && ["sparse", "balanced", "dense"].includes(directives.visual_density)
+            ? directives.visual_density
+            : "balanced";
+        const layout = visualDensity === "dense" ? "center" : "quiet";
         return {
-          scene: createScene(SceneTypes.OUTCOME_REFLECTED, { text, holdMs: reduceMotion ? 0 : 780 }),
+          scene: createScene(SceneTypes.OUTCOME_REFLECTED, { text, holdMs: reduceMotion ? 0 : 780, layout }),
           transition: createTransition(TransitionKinds.DRIFT, durationMs),
           audio: { kind: "complete" },
           haptic: { kind: "complete" },

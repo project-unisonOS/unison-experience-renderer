@@ -54,6 +54,11 @@ _event_queue: asyncio.Queue = asyncio.Queue()
 _actuation_log: List[Dict[str, Any]] = []
 _actuation_log_max = 50
 
+_build_sha = os.getenv("UNISON_RENDERER_BUILD_SHA", "unknown")
+_build_time = os.getenv("UNISON_RENDERER_BUILD_TIME", "unknown")
+_build_source = os.getenv("UNISON_RENDERER_BUILD_SOURCE", "workspace")
+_dev_watermark = os.getenv("UNISON_RENDERER_DEV_WATERMARK", "false").lower() in {"1", "true", "yes", "on"}
+
 
 @app.on_event("startup")
 def _startup_refresh():
@@ -69,7 +74,29 @@ def renderer_surface():
 
 @app.get("/health")
 def health(request: Request):
-    return {"status": "ok", "service": "unison-experience-renderer", "uptime": time.time() - _started}
+    return {
+        "status": "ok",
+        "service": "unison-experience-renderer",
+        "uptime": time.time() - _started,
+        "build": {"sha": _build_sha, "time": _build_time, "source": _build_source},
+    }
+
+
+@app.get("/meta")
+def meta(request: Request):
+    """
+    Lightweight build/runtime metadata for dev verification.
+
+    This is intended to prevent confusion about what renderer bundle is actually running.
+    """
+    hostname = os.getenv("HOSTNAME", "")
+    return {
+        "service": "unison-experience-renderer",
+        "repo": "unison-experience-renderer",
+        "build": {"sha": _build_sha, "time": _build_time, "source": _build_source},
+        "runtime": {"hostname": hostname},
+        "dev": {"watermark": _dev_watermark},
+    }
 
 
 @app.get("/readyz")

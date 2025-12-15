@@ -12,6 +12,7 @@ const glyph = document.getElementById("glyph");
 const logo = document.getElementById("logo");
 const question = document.getElementById("question");
 const quietLabel = document.getElementById("quietLabel");
+const watermark = document.getElementById("watermark");
 
 const modalities = {
   visual: createVisualAdapter({ field, glyph, logo, question, quietLabel }),
@@ -22,6 +23,7 @@ const modalities = {
 modalities.visual.present();
 
 async function boot() {
+  await maybeShowWatermark();
   const personId = new URLSearchParams(window.location.search).get("person_id") || null;
   const preferences = await fetchPreferences({ personId });
   modalities.audio = createAudioAdapter(preferences);
@@ -69,3 +71,20 @@ async function boot() {
 }
 
 boot();
+
+async function maybeShowWatermark() {
+  if (!watermark) return;
+  try {
+    const resp = await fetch("/meta", { headers: { Accept: "application/json" } });
+    if (!resp.ok) return;
+    const meta = await resp.json();
+    if (!meta?.dev?.watermark) return;
+
+    const shaFull = typeof meta?.build?.sha === "string" ? meta.build.sha : "unknown";
+    const sha = shaFull.length > 12 ? shaFull.slice(0, 12) : shaFull;
+    const host = typeof meta?.runtime?.hostname === "string" ? meta.runtime.hostname : "";
+    const suffix = host ? ` · ${host}` : "";
+    watermark.textContent = `unison-experience-renderer@${sha}${suffix}`;
+    watermark.style.opacity = "1";
+  } catch (_) {}
+}

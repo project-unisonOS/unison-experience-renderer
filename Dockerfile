@@ -2,6 +2,8 @@ FROM ghcr.io/project-unisonos/unison-common-wheel:latest AS common_wheel
 FROM python:3.12-slim@sha256:fdab368dc2e04fab3180d04508b41732756cc442586f708021560ee1341f3d29
 
 ARG REPO_PATH="."
+ARG GIT_SHA="unknown"
+ARG BUILD_TIME="unknown"
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl git ca-certificates \
@@ -16,6 +18,11 @@ RUN pip install --no-cache-dir -c ./constraints.txt /tmp/wheels/unison_common-*.
 COPY ${REPO_PATH}/src/ ./src/
 COPY ${REPO_PATH}/tests ./tests
 
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL org.opencontainers.image.created="${BUILD_TIME}"
+
+ENV UNISON_RENDERER_BUILD_SHA="${GIT_SHA}"
+ENV UNISON_RENDERER_BUILD_TIME="${BUILD_TIME}"
 ENV PYTHONPATH=/app/src
 EXPOSE 8082
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8082"]

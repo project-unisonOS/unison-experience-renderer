@@ -109,6 +109,19 @@
         transition: opacity var(--dur-med) var(--ease-soft);
       }
 
+      .watermark {
+        position: absolute;
+        right: 14px;
+        bottom: 12px;
+        font-size: 11px;
+        letter-spacing: 0.18px;
+        color: rgba(255, 255, 255, 0.52);
+        opacity: 0;
+        transition: opacity var(--dur-med) var(--ease-soft);
+        pointer-events: none;
+        text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+      }
+
       .logo {
         width: min(240px, 56vw);
         max-height: 120px;
@@ -144,6 +157,7 @@
         <div id="question" class="question"></div>
       </div>
       <div id="quietLabel" class="quiet-label" aria-hidden="true"></div>
+      <div id="watermark" class="watermark" aria-hidden="true"></div>
     </main>
     <script type="module" src="/static/app.js"></script>
   </body>

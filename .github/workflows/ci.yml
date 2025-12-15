@@ -22,5 +22,5 @@ jobs:
           OTEL_SDK_DISABLED: "true"
           DISABLE_AUTH_FOR_TESTS: "true"
         run: |
+          bash scripts/guard_no_legacy_ui.sh
           python -m pytest -q
-

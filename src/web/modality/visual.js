@@ -101,8 +101,16 @@ export function createVisualAdapter({ field, glyph, logo, question, quietLabel }
       glyph.classList.remove("presence-cue");
       await fadeOut(question, durationMs);
       await fadeIn(glyph, durationMs);
-      if (typeof scene.payload?.text === "string" && scene.payload.text.trim()) {
-        quietLabel.textContent = scene.payload.text.trim();
+      const layout = typeof scene.payload?.layout === "string" ? scene.payload.layout : "quiet";
+      const text = typeof scene.payload?.text === "string" ? scene.payload.text.trim() : "";
+      if (layout === "center") {
+        quietLabel.textContent = "";
+        quietLabel.style.opacity = "0";
+        question.textContent = text;
+        await fadeIn(question, durationMs);
+      } else if (text) {
+        question.textContent = "";
+        quietLabel.textContent = text;
         quietLabel.style.opacity = "0";
         await waitMs(20);
         quietLabel.style.opacity = "1";
@@ -113,6 +121,7 @@ export function createVisualAdapter({ field, glyph, logo, question, quietLabel }
       const holdMs = typeof scene.payload?.holdMs === "number" ? scene.payload.holdMs : 780;
       if (holdMs > 0) await waitMs(holdMs);
       quietLabel.style.opacity = "0";
+      await fadeOut(question, durationMs);
       await fadeOut(glyph, durationMs);
       return;
     }
