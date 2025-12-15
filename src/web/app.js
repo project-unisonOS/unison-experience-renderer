@@ -5,14 +5,16 @@ import { createHapticAdapter } from "./modality/haptic.js";
 import { createEventStream } from "./events.js";
 import { fetchPreferences } from "./preferences.js";
 import { SceneTypes, createScene, TransitionKinds, createTransition } from "./sceneGraph.js";
+import { createSpeechCapture } from "./speechCapture.js";
 
 const field = document.getElementById("field");
 const glyph = document.getElementById("glyph");
+const logo = document.getElementById("logo");
 const question = document.getElementById("question");
 const quietLabel = document.getElementById("quietLabel");
 
 const modalities = {
-  visual: createVisualAdapter({ field, glyph, question, quietLabel }),
+  visual: createVisualAdapter({ field, glyph, logo, question, quietLabel }),
   audio: null,
   haptic: null,
 };
@@ -25,6 +27,8 @@ async function boot() {
   modalities.audio = createAudioAdapter(preferences);
   modalities.haptic = createHapticAdapter(preferences);
   const composer = createComposer({ preferences });
+  const speechCapture = createSpeechCapture();
+  let speechStarted = false;
 
   await modalities.visual.apply(
     createScene(SceneTypes.PRESENCE, { cue: preferences.presenceCueVisual === true }),
@@ -38,6 +42,21 @@ async function boot() {
   const stream = createEventStream({
     url: "/events/stream",
     onEvent: async (eventEnvelope) => {
+      try {
+        if (!speechStarted && eventEnvelope && eventEnvelope.type === "READY_LISTENING") {
+          const payload = eventEnvelope.payload && typeof eventEnvelope.payload === "object" ? eventEnvelope.payload : {};
+          if (payload.speech_enabled === true && typeof payload.speech_ws_endpoint === "string") {
+            speechStarted = true;
+            speechCapture.start({
+              wsUrl: payload.speech_ws_endpoint,
+              endpointing: payload.endpointing || null,
+              asrProfile: payload.asr_profile || null,
+            }).catch(() => {
+              speechStarted = false;
+            });
+          }
+        }
+      } catch (_) {}
       const plan = composer.compose(eventEnvelope);
       if (!plan) return;
       await modalities.visual.apply(plan.scene, plan.transition);

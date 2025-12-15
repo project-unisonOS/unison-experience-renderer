@@ -109,9 +109,24 @@
         transition: opacity var(--dur-med) var(--ease-soft);
       }
 
+      .logo {
+        width: min(240px, 56vw);
+        max-height: 120px;
+        object-fit: contain;
+        opacity: 0;
+        transform: translate3d(0, 10px, 0) scale(0.98);
+        transition: opacity var(--dur-med) var(--ease-soft), transform var(--dur-med) var(--ease-organic);
+      }
+
+      .logo.on {
+        opacity: 0.92;
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .glyph,
-        .question {
+        .question,
+        .logo {
           transition: none;
         }
         .glyph.presence-cue {
@@ -124,6 +139,7 @@
   <body>
     <main id="field" role="main" data-scene="presence">
       <div class="center" aria-hidden="true">
+        <img id="logo" class="logo" alt="" />
         <div id="glyph" class="glyph"></div>
         <div id="question" class="question"></div>
       </div>

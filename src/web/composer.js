@@ -11,6 +11,72 @@ export function createComposer({ preferences }) {
     const { type, payload, urgency } = normalized;
     const durationMs = reduceMotion ? 0 : chooseDurationMs(urgency);
 
+    if (
+      type === "BOOT_START" ||
+      type === "MANIFEST_LOADED" ||
+      type === "IO_DISCOVERED" ||
+      type === "RENDERER_READY" ||
+      type === "SPEECH_READY" ||
+      type === "SPEECH_UNAVAILABLE"
+    ) {
+      const logoUrl = typeof payload.logo === "string" ? payload.logo : typeof payload.logo_url === "string" ? payload.logo_url : null;
+      const stageText =
+        typeof payload.stage === "string"
+          ? payload.stage
+          : type === "BOOT_START"
+            ? "Starting…"
+            : type === "MANIFEST_LOADED"
+              ? "Loading manifest…"
+              : type === "IO_DISCOVERED"
+                ? "Discovering IO…"
+                : type === "RENDERER_READY"
+                  ? "Renderer ready"
+                  : type === "SPEECH_READY"
+                    ? "Speech ready"
+                    : type === "SPEECH_UNAVAILABLE"
+                      ? "Speech unavailable"
+                      : "Booting…";
+
+      const earconUrl = typeof payload.startup_earcon === "string" ? payload.startup_earcon : null;
+
+      return {
+        scene: createScene(SceneTypes.BOOT, { logoUrl, stageText }),
+        transition: createTransition(TransitionKinds.FADE, durationMs),
+        audio: type === "MANIFEST_LOADED" ? { kind: "earcon", url: earconUrl } : null,
+        haptic: null,
+      };
+    }
+
+    if (type === "READY_LISTENING") {
+      return {
+        scene: createScene(SceneTypes.PRESENCE, { cue: preferences.presenceCueVisual === true }),
+        transition: createTransition(TransitionKinds.FADE, durationMs),
+        audio: null,
+        haptic: null,
+      };
+    }
+
+    if (type === "speech.partial") {
+      const text = typeof payload.text === "string" ? payload.text.trim() : "";
+      if (!text) return null;
+      return {
+        scene: createScene(SceneTypes.TRANSCRIPT, { text, hint: "Listening…" }),
+        transition: createTransition(TransitionKinds.FOCUS_SHIFT, durationMs),
+        audio: null,
+        haptic: null,
+      };
+    }
+
+    if (type === "tts.play") {
+      const audioUrl = typeof payload.audio_url === "string" ? payload.audio_url : "";
+      if (!audioUrl) return null;
+      return { scene: null, transition: null, audio: { kind: "tts_play", url: audioUrl }, haptic: null };
+    }
+
+    if (type === "tts.stop") {
+      return { scene: null, transition: null, audio: { kind: "tts_stop" }, haptic: null };
+    }
+
     if (type === "presence") {
       return {
         scene: createScene(SceneTypes.PRESENCE, { cue: preferences.presenceCueVisual === true }),

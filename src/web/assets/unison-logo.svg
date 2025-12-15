@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="180" viewBox="0 0 480 180" fill="none" role="img" aria-label="Unison">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.62"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="26" width="120" height="120" rx="60" fill="url(#g)" fill-opacity="0.2" stroke="url(#g)" stroke-opacity="0.65"/>
+  <path d="M84 56c18.4 0 33.3 14.9 33.3 33.3S102.4 122.7 84 122.7 50.7 107.7 50.7 89.3 65.6 56 84 56Z" fill="url(#g)"/>
+  <path d="M71 90.2c0-7.4 5.6-13.4 13-13.4s13 6 13 13.4-5.6 13.4-13 13.4-13-6-13-13.4Z" fill="#000" fill-opacity="0.84"/>
+  <text x="170" y="108" font-family="system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif" font-size="56" font-weight="600" fill="url(#g)">Unison</text>
+</svg>
+
