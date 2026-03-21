@@ -40,3 +40,5 @@ out/
 *.dmg
 *.AppImage
 
+# Local archive for process/planning docs removed from the repo root
+.docs-archive/
