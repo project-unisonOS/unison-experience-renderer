@@ -83,6 +83,7 @@
       .question {
         max-width: min(72ch, 86vw);
         text-align: center;
+        white-space: pre-line;
         letter-spacing: 0.1px;
         font-size: clamp(16px, 2.2vw, 22px);
         line-height: 1.35;
@@ -102,6 +103,9 @@
         bottom: 18px;
         left: 50%;
         transform: translateX(-50%);
+        max-width: min(72ch, 88vw);
+        text-align: center;
+        white-space: pre-line;
         font-size: 12px;
         letter-spacing: 0.24px;
         color: var(--muted-fg);
@@ -120,6 +124,74 @@
         transition: opacity var(--dur-med) var(--ease-soft);
         pointer-events: none;
         text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+      }
+
+      .actions {
+        position: absolute;
+        left: 50%;
+        bottom: 54px;
+        transform: translateX(-50%);
+        width: min(760px, 92vw);
+        display: none;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+        pointer-events: auto;
+      }
+
+      .actions[data-visible="true"] {
+        display: flex;
+      }
+
+      .action-btn,
+      .wakeword-input {
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--field-fg);
+        border-radius: 999px;
+        min-height: 38px;
+        padding: 0 14px;
+        font: inherit;
+        letter-spacing: 0.1px;
+        backdrop-filter: blur(12px);
+      }
+
+      .action-btn {
+        cursor: pointer;
+        transition: background var(--dur-fast) var(--ease-soft), border-color var(--dur-fast) var(--ease-soft);
+      }
+
+      .action-btn:hover,
+      .action-btn:focus-visible {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.28);
+        outline: none;
+      }
+
+      .wakeword-input {
+        min-width: min(220px, 60vw);
+      }
+
+      .bootstrap-input {
+        min-width: min(180px, 52vw);
+      }
+
+      .action-note {
+        position: absolute;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        width: min(760px, 92vw);
+        text-align: center;
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--muted-fg);
+        opacity: 0;
+        transition: opacity var(--dur-med) var(--ease-soft);
+      }
+
+      .action-note[data-visible="true"] {
+        opacity: 1;
       }
 
       .logo {
@@ -156,6 +228,22 @@
         <div id="glyph" class="glyph"></div>
         <div id="question" class="question"></div>
       </div>
+      <div id="actions" class="actions" aria-live="polite">
+        <button id="refreshAction" class="action-btn" type="button">Recheck</button>
+        <input id="bootstrapUser" class="wakeword-input bootstrap-input" type="text" maxlength="32" placeholder="admin username" />
+        <input id="bootstrapEmail" class="wakeword-input bootstrap-input" type="email" maxlength="120" placeholder="admin email" />
+        <input id="bootstrapPassword" class="wakeword-input bootstrap-input" type="password" maxlength="128" placeholder="admin password" />
+        <input id="bootstrapToken" class="wakeword-input bootstrap-input" type="password" maxlength="256" placeholder="bootstrap token" />
+        <button id="bootstrapAction" class="action-btn" type="button">Create admin</button>
+        <button id="micAction" class="action-btn" type="button">Check microphone</button>
+        <button id="speakerAction" class="action-btn" type="button">Check speaker</button>
+        <button id="modelAction" class="action-btn" type="button">Confirm model</button>
+        <input id="wakewordInput" class="wakeword-input" type="text" maxlength="32" placeholder="wakeword" />
+        <button id="wakewordOnAction" class="action-btn" type="button">Use wakeword</button>
+        <button id="wakewordOffAction" class="action-btn" type="button">Keep wakeword off</button>
+        <button id="finishAction" class="action-btn" type="button">Finish setup</button>
+      </div>
+      <div id="actionNote" class="action-note" aria-live="polite"></div>
       <div id="quietLabel" class="quiet-label" aria-hidden="true"></div>
       <div id="watermark" class="watermark" aria-hidden="true"></div>
     </main>

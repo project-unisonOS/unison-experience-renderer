@@ -41,6 +41,8 @@ _context_client: httpx.Client | None = None
 
 _speech_base = os.getenv("SPEECH_BASE_URL", "http://unison-io-speech:8084")
 _orchestrator_base = os.getenv("ORCHESTRATOR_BASE_URL", "http://orchestrator:8080")
+_inference_base = os.getenv("INFERENCE_BASE_URL", "http://inference:8087")
+_auth_base = os.getenv("AUTH_BASE_URL", "http://auth:8083")
 
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
 _default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-person")
@@ -166,6 +168,217 @@ def get_preferences(person_id: str | None = None):
     except Exception:
         prefs = {}
     return {"ok": True, "person_id": pid, "preferences": prefs}
+
+
+@app.get("/startup-status")
+def get_startup_status():
+    """Proxy orchestrator startup status for renderer-led first-run onboarding."""
+    try:
+        with httpx.Client(timeout=2.5) as client:
+            resp = client.get(f"{_orchestrator_base}/startup/status")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail="startup status unavailable")
+            body = resp.json() or {}
+            if not isinstance(body, dict):
+                raise HTTPException(status_code=502, detail="startup status malformed")
+            return body
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="orchestrator unavailable")
+
+
+@app.get("/onboarding-status")
+def get_onboarding_status(person_id: str | None = None):
+    """Aggregate startup, speech, inference, and preference state for first-run guidance."""
+    pid = person_id or _default_person_id
+    startup = get_startup_status()
+    profile = _get_cached_profile(pid)
+    preferences = _extract_renderer_preferences(profile) if isinstance(profile, dict) else {}
+    voice = profile.get("voice") if isinstance(profile.get("voice"), dict) else {}
+    onboarding = profile.get("onboarding") if isinstance(profile.get("onboarding"), dict) else {}
+    wakeword = voice.get("wakeword") if isinstance(voice.get("wakeword"), str) and voice.get("wakeword").strip() else _wakeword_default
+    wakeword_opt_in = bool(voice.get("wakeword_opt_in")) if isinstance(voice, dict) else False
+
+    speech_ready, speech_detail = _service_ready(f"{_speech_base}/ready")
+    inference_ready, inference_detail = _service_ready(f"{_inference_base}/ready")
+
+    steps = [
+        {
+            "id": "admin-bootstrap",
+            "label": "Create first admin identity",
+            "available": bool(startup.get("bootstrap_required")),
+            "ready": not bool(startup.get("bootstrap_required")),
+            "detail": "Required before first real use" if startup.get("bootstrap_required") else "Completed",
+        },
+        {
+            "id": "microphone-path",
+            "label": "Microphone path available",
+            "available": speech_ready,
+            "ready": speech_ready and bool(onboarding.get("microphone_checked")),
+            "detail": "Confirmed" if onboarding.get("microphone_checked") else speech_detail,
+        },
+        {
+            "id": "speaker-path",
+            "label": "Speaker path available",
+            "available": speech_ready,
+            "ready": speech_ready and bool(onboarding.get("speaker_checked")),
+            "detail": "Confirmed" if onboarding.get("speaker_checked") else speech_detail,
+        },
+        {
+            "id": "local-model",
+            "label": "Local model ready",
+            "available": inference_ready,
+            "ready": inference_ready and bool(onboarding.get("model_checked")),
+            "detail": "Confirmed" if onboarding.get("model_checked") else inference_detail,
+        },
+        {
+            "id": "wakeword-choice",
+            "label": "Wakeword choice recorded",
+            "available": True,
+            "ready": bool(onboarding.get("wakeword_configured")),
+            "detail": "Opted in" if wakeword_opt_in else "Defaulting to wakeword off",
+        },
+    ]
+
+    blocked_steps = [step["id"] for step in steps if step.get("ready") is not True]
+    remediation = []
+    if startup.get("bootstrap_required"):
+        remediation.append("Create the first admin identity with the bootstrap token from platform.env.")
+    if not speech_ready:
+        remediation.append("Bring the speech service to ready, then confirm microphone and speaker checks.")
+    if not inference_ready:
+        remediation.append("Bring the local inference service to ready before confirming the model step.")
+    if speech_ready and not onboarding.get("microphone_checked"):
+        remediation.append("Grant microphone access in the browser and confirm the microphone step.")
+    if speech_ready and not onboarding.get("speaker_checked"):
+        remediation.append("Run the speaker check and confirm that audio played.")
+    if inference_ready and not onboarding.get("model_checked"):
+        remediation.append("Confirm that the local model is available for first-run use.")
+    if not onboarding.get("wakeword_configured"):
+        remediation.append("Choose whether to keep wakeword off or opt in explicitly.")
+
+    ready_to_finish = startup.get("bootstrap_required") is False and not blocked_steps
+
+    return {
+        "ok": True,
+        "person_id": pid,
+        "startup": startup,
+        "preferences": preferences,
+        "wakeword": {
+            "value": wakeword,
+            "opt_in": wakeword_opt_in,
+            "default": _wakeword_default,
+        },
+        "onboarding": onboarding,
+        "steps": steps,
+        "blocked_steps": blocked_steps,
+        "remediation": remediation,
+        "ready_to_finish": ready_to_finish,
+    }
+
+
+@app.post("/onboarding/profile")
+def persist_onboarding_profile(body: Dict[str, Any] = Body(...)):
+    """Persist onboarding-related preferences and wakeword posture to context profile."""
+    pid = body.get("person_id") or _default_person_id
+    if not isinstance(pid, str) or not pid.strip():
+        raise HTTPException(status_code=400, detail="person_id required")
+
+    existing = _get_cached_profile(pid)
+    profile = dict(existing or {})
+    profile.setdefault("preferences", {})
+    profile.setdefault("voice", {})
+    profile.setdefault("onboarding", {})
+
+    renderer_preferences = body.get("renderer_preferences")
+    if isinstance(renderer_preferences, dict):
+        prefs = profile["preferences"] if isinstance(profile.get("preferences"), dict) else {}
+        prefs_renderer = prefs.get("renderer") if isinstance(prefs.get("renderer"), dict) else {}
+        prefs_renderer.update({k: v for k, v in renderer_preferences.items() if isinstance(v, (bool, str, int, float))})
+        prefs["renderer"] = prefs_renderer
+        profile["preferences"] = prefs
+
+    reduce_motion = body.get("reduce_motion")
+    if isinstance(reduce_motion, bool):
+        accessibility = profile.get("accessibility") if isinstance(profile.get("accessibility"), dict) else {}
+        accessibility["reduceMotion"] = reduce_motion
+        profile["accessibility"] = accessibility
+
+    wakeword_opt_in = body.get("wakeword_opt_in")
+    if isinstance(wakeword_opt_in, bool):
+        voice = profile.get("voice") if isinstance(profile.get("voice"), dict) else {}
+        voice["wakeword_opt_in"] = wakeword_opt_in
+        if wakeword_opt_in:
+            wakeword = body.get("wakeword")
+            voice["wakeword"] = wakeword.strip() if isinstance(wakeword, str) and wakeword.strip() else _wakeword_default
+        else:
+            voice["wakeword"] = ""
+        profile["voice"] = voice
+
+    onboarding = profile.get("onboarding") if isinstance(profile.get("onboarding"), dict) else {}
+    for key in ("microphone_checked", "speaker_checked", "model_checked", "wakeword_configured", "completed"):
+        value = body.get(key)
+        if isinstance(value, bool):
+            onboarding[key] = value
+    onboarding["updated_at"] = time.time()
+    if onboarding.get("completed") is True and "completed_at" not in onboarding:
+        onboarding["completed_at"] = time.time()
+    profile["onboarding"] = onboarding
+
+    try:
+        _store_profile(pid, profile)
+        _context_profile_cache[pid] = profile
+        _context_profile_cache_ts[pid] = time.time()
+        return {"ok": True, "person_id": pid, "profile": profile}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="profile persistence failed")
+
+
+@app.post("/onboarding/bootstrap-admin")
+def bootstrap_admin(body: Dict[str, Any] = Body(...)):
+    """Proxy first-admin bootstrap to auth so onboarding can complete end to end."""
+    username = body.get("username")
+    password = body.get("password")
+    bootstrap_token = body.get("bootstrap_token")
+    email = body.get("email")
+
+    if not isinstance(username, str) or not username.strip():
+        raise HTTPException(status_code=400, detail="username required")
+    if not isinstance(password, str) or not password:
+        raise HTTPException(status_code=400, detail="password required")
+    if not isinstance(bootstrap_token, str) or not bootstrap_token.strip():
+        raise HTTPException(status_code=400, detail="bootstrap_token required")
+
+    payload: Dict[str, Any] = {
+        "username": username.strip(),
+        "password": password,
+    }
+    if isinstance(email, str) and email.strip():
+        payload["email"] = email.strip()
+
+    try:
+        with httpx.Client(timeout=4.0) as client:
+            resp = client.post(
+                f"{_auth_base}/bootstrap/admin",
+                json=payload,
+                headers={"X-Unison-Bootstrap-Token": bootstrap_token.strip()},
+            )
+        if resp.status_code >= 400:
+            detail: Any
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = {"detail": "auth bootstrap failed"}
+            raise HTTPException(status_code=resp.status_code, detail=detail)
+        data = resp.json() or {}
+        return {"ok": True, "admin": data}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="auth bootstrap unavailable")
 
 
 @app.post("/speech/stt")
@@ -394,6 +607,32 @@ def _get_context_client() -> httpx.Client:
         kwargs["limits"] = limits_ctor(max_keepalive_connections=10, max_connections=20, keepalive_expiry=30.0)
     _context_client = httpx.Client(**kwargs)
     return _context_client
+
+
+def _service_ready(url: str) -> tuple[bool, str]:
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            resp = client.get(url)
+        if resp.status_code != 200:
+            return False, f"status {resp.status_code}"
+        body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        if isinstance(body, dict):
+            if "ready" in body:
+                return bool(body.get("ready")), str(body.get("detail") or body.get("provider", {}).get("detail") or "ok")
+            return True, str(body.get("status") or "ok")
+        return True, "ok"
+    except Exception:
+        return False, "unreachable"
+
+
+def _store_profile(person_id: str, profile: Dict[str, Any]) -> None:
+    client = _get_context_client()
+    resp = client.post(f"{_context_base}/profile/{person_id}", json={"profile": profile})
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail="profile store failed")
+    body = resp.json() or {}
+    if not isinstance(body, dict) or body.get("ok") is not True:
+        raise HTTPException(status_code=502, detail="profile store failed")
 
 
 def _get_cached_profile(person_id: str) -> Dict[str, Any]:

@@ -1,5 +1,6 @@
 export const SceneTypes = Object.freeze({
   BOOT: "boot",
+  ONBOARDING: "onboarding",
   PRESENCE: "presence",
   TRANSCRIPT: "transcript",
   INTENT_RECOGNIZED: "intent.recognized",

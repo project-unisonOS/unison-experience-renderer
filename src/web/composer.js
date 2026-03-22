@@ -12,12 +12,27 @@ export function createComposer({ preferences }) {
     const durationMs = reduceMotion ? 0 : chooseDurationMs(urgency);
 
     if (
+      type === "AUTH_BOOTSTRAP_REQUIRED" ||
+      type === "CORE_SERVICES_DEGRADED" ||
+      type === "RENDERER_UNAVAILABLE" ||
+      type === "SPEECH_UNAVAILABLE"
+    ) {
+      const onboarding = buildOnboardingContent(type, payload);
+      return {
+        scene: createScene(SceneTypes.ONBOARDING, onboarding),
+        transition: createTransition(TransitionKinds.FOCUS_SHIFT, durationMs),
+        audio: type === "AUTH_BOOTSTRAP_REQUIRED" ? { kind: "question" } : null,
+        haptic: null,
+      };
+    }
+
+    if (
       type === "BOOT_START" ||
       type === "MANIFEST_LOADED" ||
       type === "IO_DISCOVERED" ||
       type === "RENDERER_READY" ||
-      type === "SPEECH_READY" ||
-      type === "SPEECH_UNAVAILABLE"
+      type === "CORE_SERVICES_READY" ||
+      type === "SPEECH_READY"
     ) {
       const logoUrl = typeof payload.logo === "string" ? payload.logo : typeof payload.logo_url === "string" ? payload.logo_url : null;
       const stageText =
@@ -31,10 +46,10 @@ export function createComposer({ preferences }) {
                 ? "Discovering IO…"
                 : type === "RENDERER_READY"
                   ? "Renderer ready"
-                  : type === "SPEECH_READY"
-                    ? "Speech ready"
-                    : type === "SPEECH_UNAVAILABLE"
-                      ? "Speech unavailable"
+                  : type === "CORE_SERVICES_READY"
+                    ? "Core services ready"
+                    : type === "SPEECH_READY"
+                      ? "Speech ready"
                       : "Booting…";
 
       const earconUrl = typeof payload.startup_earcon === "string" ? payload.startup_earcon : null;
@@ -159,6 +174,59 @@ export function createComposer({ preferences }) {
   };
 
   return { compose };
+}
+
+function buildOnboardingContent(type, payload) {
+  const checks = payload && typeof payload.checks === "object" ? payload.checks : {};
+  const steps = Array.isArray(payload?.steps) ? payload.steps : [];
+  const remediation = Array.isArray(payload?.remediation) ? payload.remediation.filter((item) => typeof item === "string" && item.trim()) : [];
+  const stepSummary = steps
+    .slice(0, 4)
+    .map((step) => {
+      if (!step || typeof step !== "object") return null;
+      const label = typeof step.label === "string" ? step.label.trim() : "";
+      const ready = step.ready === true ? "ready" : "pending";
+      return label ? `${ready}: ${label}` : null;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  if (type === "AUTH_BOOTSTRAP_REQUIRED") {
+    return {
+      title: "Finish first setup",
+      body:
+        stepSummary ||
+        "Create the first admin identity to continue.\nUse the bootstrap token from platform.env, then call the auth bootstrap endpoint once.",
+      detail: remediation[0] || "Waiting for admin bootstrap",
+    };
+  }
+
+  if (type === "CORE_SERVICES_DEGRADED") {
+    const blocked = Object.entries(checks)
+      .filter(([, value]) => value && typeof value === "object" && value.ready === false)
+      .map(([name]) => name)
+      .slice(0, 4);
+    return {
+      title: "Waking the system",
+      body: stepSummary || (blocked.length ? `Still waiting on: ${blocked.join(", ")}.` : "Core services are still settling."),
+      detail: "The operating surface will continue when the system is ready",
+    };
+  }
+
+  if (type === "SPEECH_UNAVAILABLE") {
+    const reason = typeof payload.reason === "string" && payload.reason ? payload.reason.replaceAll("_", " ") : "speech unavailable";
+    return {
+      title: "Voice is not ready yet",
+      body: stepSummary || `Speech is blocked: ${reason}.`,
+      detail: remediation[0] || "You can continue once the speech path reports ready",
+    };
+  }
+
+  return {
+    title: "Preparing UnisonOS",
+    body: "The first-run experience is still gathering what it needs.",
+    detail: "Waiting for renderer readiness",
+  };
 }
 
 function chooseDurationMs(urgency) {

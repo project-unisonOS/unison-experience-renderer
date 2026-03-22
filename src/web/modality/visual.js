@@ -55,6 +55,23 @@ export function createVisualAdapter({ field, glyph, logo, question, quietLabel }
       return;
     }
 
+    if (scene.type === "onboarding") {
+      field.dataset.scene = "onboarding";
+      glyph.classList.remove("presence-cue");
+      if (logo) {
+        logo.classList.remove("on");
+      }
+      await fadeOut(glyph, durationMs);
+      const title = typeof scene.payload?.title === "string" ? scene.payload.title.trim() : "";
+      const body = typeof scene.payload?.body === "string" ? scene.payload.body.trim() : "";
+      question.textContent = [title, body].filter(Boolean).join("\n\n");
+      await fadeIn(question, durationMs);
+      const detail = typeof scene.payload?.detail === "string" ? scene.payload.detail.trim() : "";
+      quietLabel.textContent = detail;
+      quietLabel.style.opacity = detail ? "1" : "0";
+      return;
+    }
+
     if (scene.type === "transcript") {
       field.dataset.scene = "transcript";
       glyph.classList.remove("presence-cue");
