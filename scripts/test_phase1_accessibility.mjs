@@ -4,7 +4,8 @@ import AxeBuilder from "@axe-core/playwright";
 const baseUrl = process.env.UNISON_RENDERER_TEST_URL || "http://127.0.0.1:8099";
 const browser = await chromium.launch({ headless: true });
 try {
-  const page = await browser.newPage();
+  const context = await browser.newContext();
+  const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
 
   const results = await new AxeBuilder({ page })
