@@ -230,11 +230,35 @@
       </div>
       <div id="actions" class="actions" aria-live="polite">
         <button id="refreshAction" class="action-btn" type="button">Recheck</button>
-        <input id="bootstrapUser" class="wakeword-input bootstrap-input" type="text" maxlength="32" placeholder="admin username" />
-        <input id="bootstrapEmail" class="wakeword-input bootstrap-input" type="email" maxlength="120" placeholder="admin email" />
-        <input id="bootstrapPassword" class="wakeword-input bootstrap-input" type="password" maxlength="128" placeholder="admin password" />
-        <input id="bootstrapToken" class="wakeword-input bootstrap-input" type="password" maxlength="256" placeholder="bootstrap token" />
-        <button id="bootstrapAction" class="action-btn" type="button">Create admin</button>
+        <label for="bootstrapDisplayName">Your display name</label>
+        <input id="bootstrapDisplayName" class="wakeword-input bootstrap-input" type="text" maxlength="80" autocomplete="name" />
+        <label for="bootstrapHousehold">Household name</label>
+        <input id="bootstrapHousehold" class="wakeword-input bootstrap-input" type="text" maxlength="80" value="My household" />
+        <label for="bootstrapUser">Private login handle</label>
+        <input id="bootstrapUser" class="wakeword-input bootstrap-input" type="text" maxlength="32" autocomplete="username" />
+        <label for="bootstrapEmail">Email (optional)</label>
+        <input id="bootstrapEmail" class="wakeword-input bootstrap-input" type="email" maxlength="120" autocomplete="email" />
+        <label for="bootstrapPassword">Password</label>
+        <input id="bootstrapPassword" class="wakeword-input bootstrap-input" type="password" maxlength="128" autocomplete="new-password" aria-describedby="enrollmentSafety" />
+        <label for="bootstrapToken">Local bootstrap token</label>
+        <input id="bootstrapToken" class="wakeword-input bootstrap-input" type="password" maxlength="256" autocomplete="off" aria-describedby="enrollmentSafety" />
+        <label><input id="bootstrapConfirmed" type="checkbox" /> I confirm this creates my independent Person and AssistantInstance.</label>
+        <p id="enrollmentSafety">Sensitive enrollment and recovery require keyboard or another authenticated input; voice alone is never accepted.</p>
+        <button id="bootstrapAction" class="action-btn" type="button">Create my assistant</button>
+        <button id="bootstrapCancel" class="action-btn" type="button">Cancel enrollment</button>
+        <section id="identityControls" aria-labelledby="identityHeading">
+          <h2 id="identityHeading">Identity and recovery</h2>
+          <label for="loginHandle">Login handle</label>
+          <input id="loginHandle" class="wakeword-input bootstrap-input" type="text" maxlength="32" autocomplete="username" />
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" class="wakeword-input bootstrap-input" type="password" maxlength="128" autocomplete="current-password" />
+          <button id="loginAction" class="action-btn" type="button">Sign in</button>
+          <button id="logoutAction" class="action-btn" type="button">Revoke this session</button>
+          <button id="lockAction" class="action-btn" type="button">Lock my assistant</button>
+          <button id="recoveryAction" class="action-btn" type="button" aria-describedby="recoverySafety">Check recovery options</button>
+          <button id="recoveryCancel" class="action-btn" type="button">Cancel recovery</button>
+          <p id="recoverySafety">Recovery requires a separately enrolled trusted device or encrypted recovery material. Voice alone cannot recover or unlock an assistant.</p>
+        </section>
         <button id="micAction" class="action-btn" type="button">Check microphone</button>
         <button id="speakerAction" class="action-btn" type="button">Check speaker</button>
         <button id="modelAction" class="action-btn" type="button">Confirm model</button>
@@ -243,7 +267,7 @@
         <button id="wakewordOffAction" class="action-btn" type="button">Keep wakeword off</button>
         <button id="finishAction" class="action-btn" type="button">Finish setup</button>
       </div>
-      <div id="actionNote" class="action-note" aria-live="polite"></div>
+      <div id="actionNote" class="action-note" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="quietLabel" class="quiet-label" aria-hidden="true"></div>
       <div id="watermark" class="watermark" aria-hidden="true"></div>
     </main>

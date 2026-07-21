@@ -16,11 +16,22 @@ const watermark = document.getElementById("watermark");
 const actions = document.getElementById("actions");
 const actionNote = document.getElementById("actionNote");
 const refreshAction = document.getElementById("refreshAction");
+const bootstrapDisplayName = document.getElementById("bootstrapDisplayName");
+const bootstrapHousehold = document.getElementById("bootstrapHousehold");
 const bootstrapUser = document.getElementById("bootstrapUser");
 const bootstrapEmail = document.getElementById("bootstrapEmail");
 const bootstrapPassword = document.getElementById("bootstrapPassword");
 const bootstrapToken = document.getElementById("bootstrapToken");
 const bootstrapAction = document.getElementById("bootstrapAction");
+const bootstrapConfirmed = document.getElementById("bootstrapConfirmed");
+const bootstrapCancel = document.getElementById("bootstrapCancel");
+const loginHandle = document.getElementById("loginHandle");
+const loginPassword = document.getElementById("loginPassword");
+const loginAction = document.getElementById("loginAction");
+const logoutAction = document.getElementById("logoutAction");
+const lockAction = document.getElementById("lockAction");
+const recoveryAction = document.getElementById("recoveryAction");
+const recoveryCancel = document.getElementById("recoveryCancel");
 const micAction = document.getElementById("micAction");
 const speakerAction = document.getElementById("speakerAction");
 const modelAction = document.getElementById("modelAction");
@@ -41,7 +52,7 @@ async function boot() {
   await maybeShowWatermark();
   const personId = new URLSearchParams(window.location.search).get("person_id") || null;
   const preferences = await fetchPreferences({ personId });
-  const activePersonId = personId || "local-person";
+  const activePersonId = personId;
   modalities.audio = createAudioAdapter(preferences);
   modalities.haptic = createHapticAdapter(preferences);
   const composer = createComposer({ preferences });
@@ -141,7 +152,12 @@ async function maybeShowWatermark() {
 async function fetchOnboardingStatus(personId) {
   try {
     const params = personId ? `?person_id=${encodeURIComponent(personId)}` : "";
-    const resp = await fetch(`/onboarding-status${params}`, { headers: { Accept: "application/json" } });
+    const resp = await fetch(`/onboarding-status${params}`, { headers: sessionHeaders() });
+    if (resp.status === 401) {
+      const firstRun = await fetch("/first-run/status", { headers: { Accept: "application/json" } });
+      if (!firstRun.ok) return null;
+      return await firstRun.json();
+    }
     if (!resp.ok) return null;
     const body = await resp.json();
     return body && typeof body === "object" ? body : null;
@@ -211,11 +227,7 @@ function applyOnboardingControls(status, ctx) {
   const startup = status && typeof status.startup === "object" ? status.startup : {};
   const visible = startup.onboarding_required === true;
   if (actions) {
-    actions.dataset.visible = visible ? "true" : "false";
-  }
-  if (!visible) {
-    setNote("");
-    return;
+    actions.dataset.visible = "true";
   }
 
   const remediation = Array.isArray(status.remediation) ? status.remediation : [];
@@ -235,7 +247,7 @@ function applyOnboardingControls(status, ctx) {
 
   const bootstrapStep = Array.isArray(status.steps) ? status.steps.find((step) => step && step.id === "admin-bootstrap") : null;
   const bootstrapVisible = bootstrapStep && bootstrapStep.ready !== true;
-  for (const element of [bootstrapUser, bootstrapEmail, bootstrapPassword, bootstrapToken, bootstrapAction]) {
+  for (const element of [bootstrapDisplayName, bootstrapHousehold, bootstrapUser, bootstrapEmail, bootstrapPassword, bootstrapToken, bootstrapConfirmed, bootstrapAction, bootstrapCancel]) {
     if (element) {
       element.disabled = !bootstrapVisible;
       element.style.display = bootstrapVisible ? "" : "none";
@@ -245,24 +257,95 @@ function applyOnboardingControls(status, ctx) {
   if (bootstrapAction) {
     bootstrapAction.onclick = async () => {
       const username = bootstrapUser && typeof bootstrapUser.value === "string" ? bootstrapUser.value.trim() : "";
+      const displayName = bootstrapDisplayName && typeof bootstrapDisplayName.value === "string" ? bootstrapDisplayName.value.trim() : "";
+      const householdName = bootstrapHousehold && typeof bootstrapHousehold.value === "string" ? bootstrapHousehold.value.trim() : "";
       const email = bootstrapEmail && typeof bootstrapEmail.value === "string" ? bootstrapEmail.value.trim() : "";
       const password = bootstrapPassword && typeof bootstrapPassword.value === "string" ? bootstrapPassword.value : "";
       const token = bootstrapToken && typeof bootstrapToken.value === "string" ? bootstrapToken.value.trim() : "";
-      if (!username || !password || !token) {
-        setNote("Admin username, password, and bootstrap token are required.");
+      const confirmed = bootstrapConfirmed?.checked === true;
+      if (!displayName || !householdName || !username || !password || !token || !confirmed) {
+        setNote("Display name, household, login, password, local token, and explicit confirmation are required.");
         return;
       }
-      setNote("Creating the first admin identity…");
-      const result = await bootstrapAdmin({ username, email, password, bootstrapToken: token });
+      setNote("Creating your independent person and assistant identities…");
+      const result = await bootstrapAdmin({ displayName, householdName, username, email, password, bootstrapToken: token, confirmed });
       if (!result.ok) {
         setNote(result.detail || "Admin bootstrap failed.");
         return;
       }
       if (bootstrapPassword) bootstrapPassword.value = "";
       if (bootstrapToken) bootstrapToken.value = "";
-      setNote("First admin identity created.");
+      if (bootstrapConfirmed) bootstrapConfirmed.checked = false;
+      setNote("Your person and assistant identities were created. Sign in to continue setup.");
       await ctx.refreshOnboarding();
     };
+  }
+  if (bootstrapCancel) {
+    bootstrapCancel.onclick = () => {
+      for (const element of [bootstrapDisplayName, bootstrapUser, bootstrapEmail, bootstrapPassword, bootstrapToken]) {
+        if (element) element.value = "";
+      }
+      if (bootstrapConfirmed) bootstrapConfirmed.checked = false;
+      setNote("Enrollment cancelled. No identity was created.");
+    };
+  }
+
+  if (loginAction) {
+    loginAction.onclick = async () => {
+      const username = loginHandle?.value?.trim() || "";
+      const password = loginPassword?.value || "";
+      if (!username || !password) {
+        setNote("Login handle and password are required.");
+        return;
+      }
+      setNote("Signing in…");
+      try {
+        const response = await fetch("/session/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.access_token) throw new Error();
+        sessionStorage.setItem("unisonAccessToken", data.access_token);
+        if (data.refresh_token) sessionStorage.setItem("unisonRefreshToken", data.refresh_token);
+        loginPassword.value = "";
+        setNote("Signed in. Your private assistant controls are available.");
+        await ctx.refreshOnboarding();
+      } catch (_) {
+        setNote("Sign-in failed. Check the login handle and password, or try again when authentication is available.");
+      }
+    };
+  }
+  if (logoutAction) {
+    logoutAction.onclick = async () => {
+      const ok = await postSessionAction("/session/logout");
+      sessionStorage.removeItem("unisonAccessToken");
+      sessionStorage.removeItem("unisonRefreshToken");
+      setNote(ok ? "This session was revoked." : "Session revocation could not be confirmed.");
+    };
+  }
+  if (lockAction) {
+    lockAction.onclick = async () => {
+      const ok = await postSessionAction("/session/lock");
+      sessionStorage.removeItem("unisonAccessToken");
+      sessionStorage.removeItem("unisonRefreshToken");
+      setNote(ok ? "Your assistant is locked and its sessions are revoked." : "Assistant lock could not be confirmed.");
+    };
+  }
+  if (recoveryAction) {
+    recoveryAction.onclick = async () => {
+      try {
+        const response = await fetch("/session/recovery/status", { headers: { Accept: "application/json" } });
+        const data = await response.json();
+        setNote(data.detail || "Recovery status is unavailable.");
+      } catch (_) {
+        setNote("Recovery status is temporarily unavailable. No account change was made.");
+      }
+    };
+  }
+  if (recoveryCancel) {
+    recoveryCancel.onclick = () => setNote("Recovery cancelled. No account change was made.");
   }
 
   if (micAction) {
@@ -351,6 +434,24 @@ function applyOnboardingControls(status, ctx) {
   }
 }
 
+function sessionHeaders() {
+  const headers = { Accept: "application/json" };
+  const token = sessionStorage.getItem("unisonAccessToken");
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function postSessionAction(path) {
+  const token = sessionStorage.getItem("unisonAccessToken");
+  if (!token) return false;
+  try {
+    const response = await fetch(path, { method: "POST", headers: sessionHeaders() });
+    return response.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function saveOnboardingProfile(personId, payload) {
   const body = { person_id: personId, ...payload };
   const resp = await fetch("/onboarding/profile", {
@@ -364,16 +465,19 @@ async function saveOnboardingProfile(personId, payload) {
   return await resp.json();
 }
 
-async function bootstrapAdmin({ username, email, password, bootstrapToken }) {
+async function bootstrapAdmin({ displayName, householdName, username, email, password, bootstrapToken, confirmed }) {
   try {
     const resp = await fetch("/onboarding/bootstrap-admin", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         username,
+        display_name: displayName,
+        household_name: householdName,
         email,
         password,
         bootstrap_token: bootstrapToken,
+        confirmed,
       }),
     });
     if (!resp.ok) {

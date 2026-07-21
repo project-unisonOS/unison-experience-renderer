@@ -16,12 +16,24 @@ except Exception:
     BatonMiddleware = None
 from unison_common.multimodal import CapabilityClient
 from unison_common.redaction import redact_obj
+from unison_common.principal_middleware import (
+    PrincipalBindingMiddleware,
+    get_bound_principal,
+    get_current_principal_token,
+)
 
 app = FastAPI(title="unison-experience-renderer")
 
 _disable_auth = os.getenv("DISABLE_AUTH_FOR_TESTS", "false").lower() in {"1", "true", "yes", "on"}
 if BatonMiddleware and not _disable_auth:
     app.add_middleware(BatonMiddleware)
+app.add_middleware(
+    PrincipalBindingMiddleware,
+    service_name="renderer",
+    public_paths={"/", "/health", "/meta", "/ready", "/readyz", "/startup-status", "/first-run/status", "/onboarding/bootstrap-admin", "/session/login", "/session/recovery/status", "/docs", "/openapi.json"},
+    public_prefixes=("/static/",),
+    allow_test_bypass=True,
+)
 
 _started = time.time()
 _here = Path(__file__).resolve().parent
@@ -42,11 +54,9 @@ _context_client: httpx.Client | None = None
 _speech_base = os.getenv("SPEECH_BASE_URL", "http://unison-io-speech:8084")
 _orchestrator_base = os.getenv("ORCHESTRATOR_BASE_URL", "http://orchestrator:8080")
 _inference_base = os.getenv("INFERENCE_BASE_URL", "http://inference:8087")
-_auth_base = os.getenv("AUTH_BASE_URL", "http://auth:8083")
+_auth_base = os.getenv("AUTH_BASE_URL", "http://auth:8088")
 
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
-_default_person_id = os.getenv("UNISON_DEFAULT_PERSON_ID", "local-person")
-
 _test_mode = os.getenv("UNISON_RENDERER_TEST_MODE", os.getenv("UNISON_UI_TEST_MODE", "false")).lower() in {"1", "true", "yes", "on"}
 
 _event_log: List[Dict[str, Any]] = []
@@ -136,10 +146,22 @@ def refresh_capabilities():
     return {"ok": manifest is not None}
 
 
+def _bound_person_id(request: Request, supplied: str | None = None) -> str:
+    try:
+        context = get_bound_principal(request)
+        if not context.person_id:
+            raise HTTPException(status_code=403, detail="A person principal is required")
+        return context.person_id
+    except RuntimeError:
+        if _disable_auth or os.getenv("UNISON_PRINCIPAL_BINDING_TEST_BYPASS", "false").lower() == "true":
+            return supplied or "test-person"
+        raise HTTPException(status_code=401, detail="A trusted person principal is required")
+
+
 @app.get("/wakeword")
-def get_wakeword(person_id: str | None = None):
+def get_wakeword(request: Request, person_id: str | None = None):
     """Fetch the active wake word from context profile; fallback to default."""
-    pid = person_id or _default_person_id
+    pid = _bound_person_id(request, person_id)
     wakeword = _wakeword_default
     try:
         profile = _get_cached_profile(pid)
@@ -153,13 +175,13 @@ def get_wakeword(person_id: str | None = None):
 
 
 @app.get("/preferences")
-def get_preferences(person_id: str | None = None):
+def get_preferences(request: Request, person_id: str | None = None):
     """
     Fetch renderer preferences from context profile.
 
     This keeps preferences modality-independent and avoids local-only state.
     """
-    pid = person_id or _default_person_id
+    pid = _bound_person_id(request, person_id)
     prefs: Dict[str, Any] = {}
     try:
         profile = _get_cached_profile(pid)
@@ -188,10 +210,31 @@ def get_startup_status():
         raise HTTPException(status_code=502, detail="orchestrator unavailable")
 
 
+@app.get("/first-run/status")
+def get_first_run_status():
+    """Public, non-personal status used only before the first identity exists."""
+    startup = get_startup_status()
+    bootstrap_required = bool(startup.get("bootstrap_required") or startup.get("onboarding_required"))
+    return {
+        "startup": startup,
+        "steps": [
+            {
+                "id": "admin-bootstrap",
+                "label": "Create the first person and assistant",
+                "available": bootstrap_required,
+                "ready": not bootstrap_required,
+                "detail": "Requires explicit local confirmation" if bootstrap_required else "Completed",
+            }
+        ],
+        "remediation": ["Complete local first-person enrollment"] if bootstrap_required else [],
+        "ready_to_finish": False,
+    }
+
+
 @app.get("/onboarding-status")
-def get_onboarding_status(person_id: str | None = None):
+def get_onboarding_status(request: Request, person_id: str | None = None):
     """Aggregate startup, speech, inference, and preference state for first-run guidance."""
-    pid = person_id or _default_person_id
+    pid = _bound_person_id(request, person_id)
     startup = get_startup_status()
     profile = _get_cached_profile(pid)
     preferences = _extract_renderer_preferences(profile) if isinstance(profile, dict) else {}
@@ -279,9 +322,9 @@ def get_onboarding_status(person_id: str | None = None):
 
 
 @app.post("/onboarding/profile")
-def persist_onboarding_profile(body: Dict[str, Any] = Body(...)):
+def persist_onboarding_profile(request: Request, body: Dict[str, Any] = Body(...)):
     """Persist onboarding-related preferences and wakeword posture to context profile."""
-    pid = body.get("person_id") or _default_person_id
+    pid = _bound_person_id(request, body.get("person_id"))
     if not isinstance(pid, str) or not pid.strip():
         raise HTTPException(status_code=400, detail="person_id required")
 
@@ -355,6 +398,9 @@ def bootstrap_admin(body: Dict[str, Any] = Body(...)):
     payload: Dict[str, Any] = {
         "username": username.strip(),
         "password": password,
+        "display_name": str(body.get("display_name") or username).strip(),
+        "household_name": str(body.get("household_name") or "My household").strip(),
+        "confirmed": body.get("confirmed") is True,
     }
     if isinstance(email, str) and email.strip():
         payload["email"] = email.strip()
@@ -381,16 +427,86 @@ def bootstrap_admin(body: Dict[str, Any] = Body(...)):
         raise HTTPException(status_code=502, detail="auth bootstrap unavailable")
 
 
+@app.post("/session/login")
+def session_login(body: Dict[str, Any] = Body(...)):
+    username = body.get("username")
+    password = body.get("password")
+    if not isinstance(username, str) or not username.strip() or not isinstance(password, str) or not password:
+        raise HTTPException(status_code=400, detail="Login handle and password are required")
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.post(
+                f"{_auth_base}/token",
+                data={"username": username.strip(), "password": password, "grant_type": "password"},
+            )
+        if response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Sign-in failed")
+        return response.json()
+    except HTTPException:
+        raise
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail="Authentication is temporarily unavailable") from exc
+
+
+@app.post("/session/logout")
+def session_logout():
+    token = get_current_principal_token()
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.post(
+                f"{_auth_base}/logout",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if response.status_code >= 400:
+            raise HTTPException(status_code=403, detail="Session revocation failed")
+        return {"ok": True, "status": "revoked"}
+    except HTTPException:
+        raise
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail="Revocation is temporarily unavailable") from exc
+
+
+@app.post("/session/lock")
+def session_lock():
+    token = get_current_principal_token()
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.post(
+                f"{_auth_base}/persons/me/lock",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        if response.status_code >= 400:
+            raise HTTPException(status_code=403, detail="Assistant lock failed")
+        return {"ok": True, "status": "locked"}
+    except HTTPException:
+        raise
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail="Lock service is temporarily unavailable") from exc
+
+
+@app.get("/session/recovery/status")
+def session_recovery_status():
+    return {
+        "available": False,
+        "status": "trusted-device-required",
+        "detail": "Recovery requires a separately enrolled trusted device or encrypted recovery material. Voice alone is never accepted.",
+        "can_cancel": True,
+    }
+
+
 @app.post("/speech/stt")
 def proxy_speech_stt(request: Request, body: Dict[str, Any] = Body(...)):
     """Proxy mic audio to the speech STT service with baton propagation."""
     audio_b64 = body.get("audio")
-    person_id = body.get("person_id") or _default_person_id
+    person_id = _bound_person_id(request, body.get("person_id"))
     session_id = body.get("session_id") or "default-session"
     if not isinstance(audio_b64, str) or not audio_b64:
         raise HTTPException(status_code=400, detail="audio base64 string required")
     payload = {"audio": audio_b64, "person_id": person_id, "session_id": session_id}
     headers = {}
+    token = get_current_principal_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     baton = request.headers.get("X-Context-Baton")
     if baton:
         headers["X-Context-Baton"] = baton
@@ -406,12 +522,12 @@ def proxy_speech_stt(request: Request, body: Dict[str, Any] = Body(...)):
 
 
 @app.post("/payments/approvals")
-def record_payment_approval(body: Dict[str, Any] = Body(...)):
+def record_payment_approval(request: Request, body: Dict[str, Any] = Body(...)):
     """Capture a payment approval intent for renderer-driven flows."""
     approval = {
         "txn_id": body.get("txn_id"),
         "approved": bool(body.get("approved")),
-        "person_id": body.get("person_id") or _default_person_id,
+        "person_id": _bound_person_id(request, body.get("person_id")),
         "surface": body.get("surface"),
         "timestamp": time.time(),
     }
@@ -421,12 +537,14 @@ def record_payment_approval(body: Dict[str, Any] = Body(...)):
 
 
 @app.get("/payments/transactions/{txn_id}")
-def get_payment_status(txn_id: str, person_id: str | None = None):
+def get_payment_status(txn_id: str, request: Request, person_id: str | None = None):
     """Proxy payment status from orchestrator for renderer consumption."""
-    pid = person_id or _default_person_id
+    pid = _bound_person_id(request, person_id)
     try:
         with httpx.Client(timeout=3.0) as client:
-            resp = client.get(f"{_orchestrator_base}/payments/transactions/{txn_id}")
+            token = get_current_principal_token()
+            headers = {"Authorization": f"Bearer {token}"} if token else None
+            resp = client.get(f"{_orchestrator_base}/payments/transactions/{txn_id}", headers=headers)
             if resp.status_code != 200:
                 raise HTTPException(status_code=resp.status_code, detail="payment status unavailable")
             body = resp.json()
@@ -627,7 +745,9 @@ def _service_ready(url: str) -> tuple[bool, str]:
 
 def _store_profile(person_id: str, profile: Dict[str, Any]) -> None:
     client = _get_context_client()
-    resp = client.post(f"{_context_base}/profile/{person_id}", json={"profile": profile})
+    token = get_current_principal_token()
+    headers = {"Authorization": f"Bearer {token}"} if token else _context_headers
+    resp = client.post(f"{_context_base}/profile/{person_id}", json={"profile": profile}, headers=headers)
     if resp.status_code != 200:
         raise HTTPException(status_code=resp.status_code, detail="profile store failed")
     body = resp.json() or {}
@@ -645,7 +765,9 @@ def _get_cached_profile(person_id: str) -> Dict[str, Any]:
     profile: Dict[str, Any] = {}
     try:
         client = _get_context_client()
-        resp = client.get(f"{_context_base}/profile/{person_id}")
+        token = get_current_principal_token()
+        headers = {"Authorization": f"Bearer {token}"} if token else _context_headers
+        resp = client.get(f"{_context_base}/profile/{person_id}", headers=headers)
         if resp.status_code == 200:
             body = resp.json() or {}
             p = body.get("profile")

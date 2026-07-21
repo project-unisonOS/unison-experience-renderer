@@ -8,15 +8,15 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
         run: |
           python -m pip install --upgrade pip setuptools==75.6.0
           pip install -c constraints.txt -r requirements.txt
-          pip install -c constraints.txt git+https://github.com/project-unisonOS/unison-common.git@17ad69a4eb91704f9286dc1694b71c4b455d815a
+          pip install -c constraints.txt git+https://github.com/project-unisonOS/unison-common.git@d7ce26691dc187db7f7e2e87f767f4143078d412
       - name: Test
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
@@ -25,3 +25,15 @@ jobs:
         run: |
           bash scripts/guard_no_legacy_ui.sh
           python -m pytest -q
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install Chromium accessibility runner
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run real-browser Phase 1 accessibility evidence
+        run: |
+          python -m http.server 8099 --directory src/web >/tmp/unison-renderer-http.log 2>&1 &
+          npm run test:phase1-accessibility
