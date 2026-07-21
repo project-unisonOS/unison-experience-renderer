@@ -185,6 +185,26 @@ def _context_json(method: str, path: str, *, payload: dict[str, Any] | None = No
         raise HTTPException(status_code=502, detail="Context service unavailable") from exc
 
 
+def _auth_json(method: str, path: str, *, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    token = get_current_principal_token()
+    try:
+        with httpx.Client(timeout=4.0) as client:
+            response = client.request(
+                method, f"{_auth_base}{path}", json=payload,
+                headers={"Authorization": f"Bearer {token}"} if token else None,
+            )
+        if response.status_code >= 400:
+            raise HTTPException(status_code=response.status_code, detail="Household request rejected")
+        body = response.json()
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=502, detail="Household response malformed")
+        return body
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Household service unavailable") from exc
+
+
 @app.get("/context/privacy-state")
 def context_privacy_state(request: Request, person_id: str | None = None):
     """Inspectable semantic state; content remains in the authoritative context service."""
@@ -253,6 +273,49 @@ def context_goal_create(request: Request, body: Dict[str, Any] = Body(...)):
 def context_commitment_create(request: Request, body: Dict[str, Any] = Body(...)):
     pid = _bound_person_id(request, body.get("person_id"))
     return _context_json("POST", "/v2/commitments", payload={**body, "person_id": pid})
+
+
+@app.get("/household/members")
+def household_members(request: Request):
+    _bound_person_id(request)
+    return _auth_json("GET", "/households/members")
+
+
+@app.post("/household/invitations")
+def household_invitation(request: Request, body: Dict[str, Any] = Body(...)):
+    _bound_person_id(request)
+    return _auth_json("POST", "/households/invitations", payload=body)
+
+
+@app.delete("/household/members/{person_id}")
+def household_remove_member(person_id: str, request: Request):
+    _bound_person_id(request)
+    return _auth_json("DELETE", f"/households/members/{person_id}")
+
+
+@app.post("/household/coordinate")
+def household_coordinate(request: Request, body: Dict[str, Any] = Body(...)):
+    pid = _bound_person_id(request, body.get("person_id"))
+    return _context_json(
+        "POST", "/v2/household/coordinate", payload={**body, "person_id": pid}
+    )
+
+
+@app.get("/household/audit")
+def household_audit(request: Request, space_id: str):
+    pid = _bound_person_id(request)
+    return _context_json("GET", f"/v2/audit?space_id={space_id}&person_id={pid}")
+
+
+@app.get("/household/resources")
+def household_resources(request: Request):
+    _bound_person_id(request)
+    return {
+        "assistant_count": int(os.getenv("UNISON_HOUSEHOLD_ASSISTANT_COUNT", "2")),
+        "default_max_concurrent_tasks": int(os.getenv("UNISON_ASSISTANT_MAX_CONCURRENT", "1")),
+        "default_max_queued_tasks": int(os.getenv("UNISON_ASSISTANT_MAX_QUEUED", "16")),
+        "contains_task_content": False,
+    }
 
 
 @app.get("/wakeword")
