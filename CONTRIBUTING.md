@@ -46,7 +46,7 @@ All contributions â€” code, documentation, research, or accessibility testing â€
 - Use semantic Markdown headings (`#`, `##`, etc.) and plain-language summaries.  
 - Add **alt text** for all images and diagrams.  
 - Keep diagrams and references versioned in the `/docs` or `/specs` folder.  
-- Update the `user-journeys` folder when adding new behavioral flows.
+- Update the journey documentation when adding new behavioral flows.
 
 ---
 
