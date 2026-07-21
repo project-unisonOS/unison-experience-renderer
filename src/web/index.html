@@ -314,6 +314,53 @@
           <button id="contextCancel" class="action-btn" type="button">Cancel context changes</button>
           <p id="contextStatus" role="status" aria-live="polite" aria-atomic="true"></p>
         </section>
+        <section id="householdControls" aria-labelledby="householdHeading">
+          <h2 id="householdHeading">Household coordination</h2>
+          <p id="householdBoundaryHelp">Each adult has an independent assistant. Household administration can manage membership and resource limits, but cannot read another adult's private messages, goals, credentials, memory, or audit.</p>
+          <button id="householdMembersRefresh" class="action-btn" type="button">Review household membership</button>
+          <output id="householdMembers" aria-live="polite" aria-atomic="true">Household membership has not been loaded.</output>
+
+          <fieldset>
+            <legend>Invite or remove an independent adult</legend>
+            <label for="householdInvitationMinutes">Invitation lifetime in minutes</label>
+            <input id="householdInvitationMinutes" class="wakeword-input bootstrap-input" type="number" min="5" max="1440" value="30" />
+            <button id="householdInvite" class="action-btn" type="button" aria-describedby="householdBoundaryHelp">Create one-use adult invitation</button>
+            <label for="householdRemovePerson">Person identifier to remove</label>
+            <input id="householdRemovePerson" class="wakeword-input bootstrap-input" type="text" />
+            <label><input id="householdRemoveConfirmed" type="checkbox" /> I understand removal revokes appliance and shared-space access but does not transfer private keys or data.</label>
+            <button id="householdRemove" class="action-btn" type="button">Remove household member</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Shared calendar and grocery list</legend>
+            <label for="householdId">Household identifier</label>
+            <input id="householdId" class="wakeword-input bootstrap-input" type="text" />
+            <label for="householdSpaceId">Shared context space identifier</label>
+            <input id="householdSpaceId" class="wakeword-input bootstrap-input" type="text" />
+            <label for="householdCalendarTitle">Calendar event title</label>
+            <input id="householdCalendarTitle" class="wakeword-input bootstrap-input" type="text" maxlength="160" />
+            <label for="householdCalendarStart">Starts</label>
+            <input id="householdCalendarStart" type="datetime-local" />
+            <label for="householdCalendarEnd">Ends</label>
+            <input id="householdCalendarEnd" type="datetime-local" />
+            <button id="householdCalendarAdd" class="action-btn" type="button">Add shared calendar event</button>
+            <label for="householdGroceryItem">Grocery item</label>
+            <input id="householdGroceryItem" class="wakeword-input bootstrap-input" type="text" maxlength="120" />
+            <label for="householdGroceryQuantity">Quantity</label>
+            <input id="householdGroceryQuantity" class="wakeword-input bootstrap-input" type="text" maxlength="40" />
+            <button id="householdGroceryAdd" class="action-btn" type="button">Add shared grocery item</button>
+            <button id="householdArtifactsRefresh" class="action-btn" type="button">Review shared artifacts</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Audit, resources, denial, and recovery</legend>
+            <button id="householdAuditRefresh" class="action-btn" type="button">Review shared audit</button>
+            <button id="householdResourcesRefresh" class="action-btn" type="button">Review assistant resource limits</button>
+            <button id="householdRecoveryReview" class="action-btn" type="button">Review restart and recovery steps</button>
+            <output id="householdOutcome" role="status" aria-live="polite" aria-atomic="true">No household action has been requested.</output>
+          </fieldset>
+          <button id="householdCancel" class="action-btn" type="button">Cancel household changes</button>
+        </section>
         <section id="trustDecision" aria-labelledby="trustDecisionHeading" hidden>
           <h2 id="trustDecisionHeading">Review what Unison proposes</h2>
           <p id="trustDecisionSummary" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -345,6 +392,7 @@
     </main>
     <script type="module" src="/static/app.js"></script>
     <script type="module" src="/static/contextPrivacy.js"></script>
+    <script type="module" src="/static/householdProof.js"></script>
     <script type="module" src="/static/trustDecision.js"></script>
   </body>
 </html>
