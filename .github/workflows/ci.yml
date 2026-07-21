@@ -39,4 +39,14 @@ jobs:
           UNISON_PRINCIPAL_BINDING_TEST_BYPASS: "true"
         run: |
           python -m uvicorn main:app --app-dir src --host 127.0.0.1 --port 8099 >/tmp/unison-renderer-http.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8099/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              cat /tmp/unison-renderer-http.log
+              exit 1
+            fi
+            sleep 1
+          done
           npm run test:phase2-accessibility
