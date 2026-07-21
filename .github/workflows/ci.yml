@@ -33,7 +33,10 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: Run real-browser Phase 1 accessibility evidence
+      - name: Run real-browser Phase 1 and Phase 2 accessibility evidence
+        env:
+          DISABLE_AUTH_FOR_TESTS: "true"
+          UNISON_PRINCIPAL_BINDING_TEST_BYPASS: "true"
         run: |
-          python -m http.server 8099 --directory src/web >/tmp/unison-renderer-http.log 2>&1 &
-          npm run test:phase1-accessibility
+          python -m uvicorn main:app --app-dir src --host 127.0.0.1 --port 8099 >/tmp/unison-renderer-http.log 2>&1 &
+          npm run test:phase2-accessibility

@@ -7,6 +7,9 @@ try {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await page.locator("#actions").evaluate((element) => {
+    element.style.display = "flex";
+  });
 
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -30,6 +33,26 @@ try {
     "lockAction",
     "recoveryAction",
     "recoveryCancel",
+    "contextSpaceName",
+    "contextSpacePurpose",
+    "contextSpaceCreate",
+    "memoryRecordId",
+    "memoryCorrection",
+    "memoryCorrect",
+    "memoryDeleteConfirmed",
+    "memoryDelete",
+    "shareTargetSpace",
+    "shareConfirmed",
+    "memoryShare",
+    "charterPrinciples",
+    "charterSave",
+    "goalTitle",
+    "goalSpaceId",
+    "goalCreate",
+    "commitmentTitle",
+    "commitmentSpaceId",
+    "commitmentCreate",
+    "contextCancel",
   ];
   for (const id of required) {
     const locator = page.locator(`#${id}`);
@@ -43,7 +66,36 @@ try {
   await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "active" });
   const status = page.locator('#actionNote[role="status"][aria-live="polite"]');
   if ((await status.count()) !== 1) throw new Error("semantic live status is missing");
-  console.log(`[PASS] Phase 1 renderer accessibility: axe=0, controls=${required.length}, first-focus=${focused}`);
+  const contextStatus = page.locator('#contextStatus[role="status"][aria-live="polite"]');
+  if ((await contextStatus.count()) !== 1) throw new Error("context privacy live status is missing");
+
+  await page.route("**/context/privacy-state", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ spaces: [{ space_id: "shared-test", name: "Family plan", kind: "shared" }] }),
+    });
+  });
+  await page.route("**/context/spaces", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ space: { space_id: "shared-test", name: "Family plan" } }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.locator("#contextSpaceName").fill("Family plan");
+  await page.locator("#contextSpacePurpose").fill("Coordinate a visit");
+  await page.locator("#contextSpaceCreate").click();
+  await page.waitForFunction(() => document.getElementById("contextStatus")?.textContent?.length > 0);
+  const contextMessage = await contextStatus.textContent();
+  if (!contextMessage?.includes("completed")) {
+    throw new Error(`keyboard-native context creation status was: ${contextMessage || "empty"}`);
+  }
+  console.log(`[PASS] Phase 1/2 renderer accessibility: axe=0, controls=${required.length}, first-focus=${focused}`);
 } finally {
   await browser.close();
 }
