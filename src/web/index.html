@@ -135,7 +135,12 @@
         display: none;
         gap: 10px;
         justify-content: center;
+        align-content: flex-start;
         flex-wrap: wrap;
+        max-height: calc(100vh - 108px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 4px 8px 12px;
         pointer-events: auto;
       }
 
@@ -230,11 +235,102 @@
       </div>
       <div id="actions" class="actions" aria-live="polite">
         <button id="refreshAction" class="action-btn" type="button">Recheck</button>
-        <input id="bootstrapUser" class="wakeword-input bootstrap-input" type="text" maxlength="32" placeholder="admin username" />
-        <input id="bootstrapEmail" class="wakeword-input bootstrap-input" type="email" maxlength="120" placeholder="admin email" />
-        <input id="bootstrapPassword" class="wakeword-input bootstrap-input" type="password" maxlength="128" placeholder="admin password" />
-        <input id="bootstrapToken" class="wakeword-input bootstrap-input" type="password" maxlength="256" placeholder="bootstrap token" />
-        <button id="bootstrapAction" class="action-btn" type="button">Create admin</button>
+        <label for="bootstrapDisplayName">Your display name</label>
+        <input id="bootstrapDisplayName" class="wakeword-input bootstrap-input" type="text" maxlength="80" autocomplete="name" />
+        <label for="bootstrapHousehold">Household name</label>
+        <input id="bootstrapHousehold" class="wakeword-input bootstrap-input" type="text" maxlength="80" value="My household" />
+        <label for="bootstrapUser">Private login handle</label>
+        <input id="bootstrapUser" class="wakeword-input bootstrap-input" type="text" maxlength="32" autocomplete="username" />
+        <label for="bootstrapEmail">Email (optional)</label>
+        <input id="bootstrapEmail" class="wakeword-input bootstrap-input" type="email" maxlength="120" autocomplete="email" />
+        <label for="bootstrapPassword">Password</label>
+        <input id="bootstrapPassword" class="wakeword-input bootstrap-input" type="password" maxlength="128" autocomplete="new-password" aria-describedby="enrollmentSafety" />
+        <label for="bootstrapToken">Local bootstrap token</label>
+        <input id="bootstrapToken" class="wakeword-input bootstrap-input" type="password" maxlength="256" autocomplete="off" aria-describedby="enrollmentSafety" />
+        <label><input id="bootstrapConfirmed" type="checkbox" /> I confirm this creates my independent Person and AssistantInstance.</label>
+        <p id="enrollmentSafety">Sensitive enrollment and recovery require keyboard or another authenticated input; voice alone is never accepted.</p>
+        <button id="bootstrapAction" class="action-btn" type="button">Create my assistant</button>
+        <button id="bootstrapCancel" class="action-btn" type="button">Cancel enrollment</button>
+        <section id="identityControls" aria-labelledby="identityHeading">
+          <h2 id="identityHeading">Identity and recovery</h2>
+          <label for="loginHandle">Login handle</label>
+          <input id="loginHandle" class="wakeword-input bootstrap-input" type="text" maxlength="32" autocomplete="username" />
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" class="wakeword-input bootstrap-input" type="password" maxlength="128" autocomplete="current-password" />
+          <button id="loginAction" class="action-btn" type="button">Sign in</button>
+          <button id="logoutAction" class="action-btn" type="button">Revoke this session</button>
+          <button id="lockAction" class="action-btn" type="button">Lock my assistant</button>
+          <button id="recoveryAction" class="action-btn" type="button" aria-describedby="recoverySafety">Check recovery options</button>
+          <button id="recoveryCancel" class="action-btn" type="button">Cancel recovery</button>
+          <p id="recoverySafety">Recovery requires a separately enrolled trusted device or encrypted recovery material. Voice alone cannot recover or unlock an assistant.</p>
+        </section>
+        <section id="contextControls" aria-labelledby="contextHeading">
+          <h2 id="contextHeading">Context, memory, and commitments</h2>
+          <p id="contextBoundaryHelp">Private information stays private unless you explicitly copy it into a shared context space. Relationships alone never grant access.</p>
+          <button id="privacyRefresh" class="action-btn" type="button">Review what Unison knows</button>
+          <output id="privacyState" aria-live="polite" aria-atomic="true">Context privacy state has not been loaded.</output>
+
+          <fieldset>
+            <legend>Create a context space</legend>
+            <label for="contextSpaceName">Space name</label>
+            <input id="contextSpaceName" class="wakeword-input bootstrap-input" type="text" maxlength="80" />
+            <label for="contextSpacePurpose">Purpose</label>
+            <input id="contextSpacePurpose" class="wakeword-input bootstrap-input" type="text" maxlength="160" />
+            <button id="contextSpaceCreate" class="action-btn" type="button">Create shared space</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Correct, delete, or explicitly share memory</legend>
+            <label for="memoryRecordId">Memory record identifier</label>
+            <input id="memoryRecordId" class="wakeword-input bootstrap-input" type="text" />
+            <label for="memoryCorrection">Corrected information</label>
+            <textarea id="memoryCorrection" aria-describedby="contextBoundaryHelp"></textarea>
+            <button id="memoryCorrect" class="action-btn" type="button">Save correction</button>
+            <label><input id="memoryDeleteConfirmed" type="checkbox" /> I understand deletion removes this memory from active retrieval.</label>
+            <button id="memoryDelete" class="action-btn" type="button">Delete memory</button>
+            <label for="shareTargetSpace">Shared target space identifier</label>
+            <input id="shareTargetSpace" class="wakeword-input bootstrap-input" type="text" />
+            <p id="sharePreview">Share preview: the private source remains private; an auditable copy will be created in the selected shared space.</p>
+            <label><input id="shareConfirmed" type="checkbox" /> I reviewed this share preview and approve the copy.</label>
+            <button id="memoryShare" class="action-btn" type="button" aria-describedby="sharePreview">Share selected memory</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Personal charter, goals, and commitments</legend>
+            <label for="charterPrinciples">Charter principles, one per line</label>
+            <textarea id="charterPrinciples"></textarea>
+            <button id="charterSave" class="action-btn" type="button">Save charter revision</button>
+            <label for="goalTitle">Goal</label>
+            <input id="goalTitle" class="wakeword-input bootstrap-input" type="text" />
+            <label for="goalSpaceId">Goal context space</label>
+            <input id="goalSpaceId" class="wakeword-input bootstrap-input" type="text" />
+            <button id="goalCreate" class="action-btn" type="button">Add goal</button>
+            <label for="commitmentTitle">Commitment</label>
+            <input id="commitmentTitle" class="wakeword-input bootstrap-input" type="text" />
+            <label for="commitmentSpaceId">Commitment context space</label>
+            <input id="commitmentSpaceId" class="wakeword-input bootstrap-input" type="text" />
+            <button id="commitmentCreate" class="action-btn" type="button">Add commitment</button>
+          </fieldset>
+          <button id="contextCancel" class="action-btn" type="button">Cancel context changes</button>
+          <p id="contextStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+        </section>
+        <section id="trustDecision" aria-labelledby="trustDecisionHeading" hidden>
+          <h2 id="trustDecisionHeading">Review what Unison proposes</h2>
+          <p id="trustDecisionSummary" role="status" aria-live="polite" aria-atomic="true"></p>
+          <dl>
+            <dt>Action</dt><dd id="trustAction"></dd>
+            <dt>Recipients</dt><dd id="trustRecipients"></dd>
+            <dt>Information used</dt><dd id="trustData"></dd>
+            <dt>Why</dt><dd id="trustPurpose"></dd>
+            <dt>Consequence</dt><dd id="trustConsequence"></dd>
+            <dt>Can it be undone?</dt><dd id="trustReversible"></dd>
+            <dt>Maximum cost</dt><dd id="trustCost"></dd>
+          </dl>
+          <p id="trustVoiceEquivalent">You can say “confirm”, “cancel”, or “use less information”. Strong authentication may still require a trusted non-voice input.</p>
+          <button id="trustConfirm" class="action-btn" type="button" aria-describedby="trustVoiceEquivalent">Confirm this exact action</button>
+          <button id="trustMinimize" class="action-btn" type="button">Use less information</button>
+          <button id="trustCancel" class="action-btn" type="button">Cancel</button>
+        </section>
         <button id="micAction" class="action-btn" type="button">Check microphone</button>
         <button id="speakerAction" class="action-btn" type="button">Check speaker</button>
         <button id="modelAction" class="action-btn" type="button">Confirm model</button>
@@ -243,10 +339,12 @@
         <button id="wakewordOffAction" class="action-btn" type="button">Keep wakeword off</button>
         <button id="finishAction" class="action-btn" type="button">Finish setup</button>
       </div>
-      <div id="actionNote" class="action-note" aria-live="polite"></div>
+      <div id="actionNote" class="action-note" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="quietLabel" class="quiet-label" aria-hidden="true"></div>
       <div id="watermark" class="watermark" aria-hidden="true"></div>
     </main>
     <script type="module" src="/static/app.js"></script>
+    <script type="module" src="/static/contextPrivacy.js"></script>
+    <script type="module" src="/static/trustDecision.js"></script>
   </body>
 </html>
