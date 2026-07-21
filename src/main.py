@@ -158,6 +158,103 @@ def _bound_person_id(request: Request, supplied: str | None = None) -> str:
         raise HTTPException(status_code=401, detail="A trusted person principal is required")
 
 
+def _context_auth_headers() -> dict[str, str]:
+    token = get_current_principal_token()
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return dict(_context_headers)
+
+
+def _context_json(method: str, path: str, *, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        with httpx.Client(timeout=3.0) as client:
+            response = client.request(
+                method, f"{_context_base}{path}", json=payload,
+                headers=_context_auth_headers(),
+            )
+        if response.status_code >= 400:
+            detail = "Context unavailable" if response.status_code == 404 else "Context request rejected"
+            raise HTTPException(status_code=response.status_code, detail=detail)
+        body = response.json()
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=502, detail="Context response malformed")
+        return body
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Context service unavailable") from exc
+
+
+@app.get("/context/privacy-state")
+def context_privacy_state(request: Request, person_id: str | None = None):
+    """Inspectable semantic state; content remains in the authoritative context service."""
+    pid = _bound_person_id(request, person_id)
+    spaces = _context_json("GET", f"/v2/spaces?person_id={pid}").get("spaces", [])
+    charter = None
+    try:
+        charter = _context_json("GET", f"/v2/charter?person_id={pid}").get("charter")
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+    goals = _context_json("GET", f"/v2/goals?person_id={pid}").get("goals", [])
+    commitments = _context_json("GET", f"/v2/commitments?person_id={pid}").get("commitments", [])
+    return {
+        "ok": True,
+        "person_id": pid,
+        "privacy": {
+            "sharing_requires_explicit_space": True,
+            "relationships_grant_access": False,
+            "default_disclosure": "deny",
+        },
+        "spaces": spaces,
+        "charter": charter,
+        "goals": goals,
+        "commitments": commitments,
+    }
+
+
+@app.post("/context/spaces")
+def context_space_create(request: Request, body: Dict[str, Any] = Body(...)):
+    pid = _bound_person_id(request, body.get("person_id"))
+    return _context_json("POST", "/v2/spaces", payload={**body, "person_id": pid})
+
+
+@app.post("/context/memory/{record_id}/correct")
+def context_memory_correct(record_id: str, request: Request, body: Dict[str, Any] = Body(...)):
+    pid = _bound_person_id(request, body.get("person_id"))
+    return _context_json("POST", f"/v2/memory/{record_id}/correct", payload={**body, "person_id": pid})
+
+
+@app.delete("/context/memory/{record_id}")
+def context_memory_delete(record_id: str, request: Request, person_id: str | None = None):
+    pid = _bound_person_id(request, person_id)
+    return _context_json("DELETE", f"/v2/memory/{record_id}?person_id={pid}")
+
+
+@app.post("/context/memory/{record_id}/share")
+def context_memory_share(record_id: str, request: Request, body: Dict[str, Any] = Body(...)):
+    pid = _bound_person_id(request, body.get("person_id"))
+    return _context_json("POST", f"/v2/memory/{record_id}/share", payload={**body, "person_id": pid})
+
+
+@app.put("/context/charter")
+def context_charter_update(request: Request, body: Dict[str, Any] = Body(...)):
+    pid = _bound_person_id(request, body.get("person_id"))
+    return _context_json("PUT", "/v2/charter", payload={**body, "person_id": pid})
+
+
+@app.post("/context/goals")
+def context_goal_create(request: Request, body: Dict[str, Any] = Body(...)):
+    pid = _bound_person_id(request, body.get("person_id"))
+    return _context_json("POST", "/v2/goals", payload={**body, "person_id": pid})
+
+
+@app.post("/context/commitments")
+def context_commitment_create(request: Request, body: Dict[str, Any] = Body(...)):
+    pid = _bound_person_id(request, body.get("person_id"))
+    return _context_json("POST", "/v2/commitments", payload={**body, "person_id": pid})
+
+
 @app.get("/wakeword")
 def get_wakeword(request: Request, person_id: str | None = None):
     """Fetch the active wake word from context profile; fallback to default."""
