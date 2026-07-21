@@ -314,6 +314,23 @@
           <button id="contextCancel" class="action-btn" type="button">Cancel context changes</button>
           <p id="contextStatus" role="status" aria-live="polite" aria-atomic="true"></p>
         </section>
+        <section id="trustDecision" aria-labelledby="trustDecisionHeading" hidden>
+          <h2 id="trustDecisionHeading">Review what Unison proposes</h2>
+          <p id="trustDecisionSummary" role="status" aria-live="polite" aria-atomic="true"></p>
+          <dl>
+            <dt>Action</dt><dd id="trustAction"></dd>
+            <dt>Recipients</dt><dd id="trustRecipients"></dd>
+            <dt>Information used</dt><dd id="trustData"></dd>
+            <dt>Why</dt><dd id="trustPurpose"></dd>
+            <dt>Consequence</dt><dd id="trustConsequence"></dd>
+            <dt>Can it be undone?</dt><dd id="trustReversible"></dd>
+            <dt>Maximum cost</dt><dd id="trustCost"></dd>
+          </dl>
+          <p id="trustVoiceEquivalent">You can say “confirm”, “cancel”, or “use less information”. Strong authentication may still require a trusted non-voice input.</p>
+          <button id="trustConfirm" class="action-btn" type="button" aria-describedby="trustVoiceEquivalent">Confirm this exact action</button>
+          <button id="trustMinimize" class="action-btn" type="button">Use less information</button>
+          <button id="trustCancel" class="action-btn" type="button">Cancel</button>
+        </section>
         <button id="micAction" class="action-btn" type="button">Check microphone</button>
         <button id="speakerAction" class="action-btn" type="button">Check speaker</button>
         <button id="modelAction" class="action-btn" type="button">Confirm model</button>
@@ -328,5 +345,6 @@
     </main>
     <script type="module" src="/static/app.js"></script>
     <script type="module" src="/static/contextPrivacy.js"></script>
+    <script type="module" src="/static/trustDecision.js"></script>
   </body>
 </html>
