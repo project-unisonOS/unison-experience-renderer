@@ -14,8 +14,9 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools==75.6.0
           pip install -c constraints.txt -r requirements.txt
+          pip install -c constraints.txt git+https://github.com/project-unisonOS/unison-common.git@17ad69a4eb91704f9286dc1694b71c4b455d815a
       - name: Test
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
