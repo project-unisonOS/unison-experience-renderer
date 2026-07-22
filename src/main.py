@@ -55,6 +55,7 @@ _speech_base = os.getenv("SPEECH_BASE_URL", "http://unison-io-speech:8084")
 _orchestrator_base = os.getenv("ORCHESTRATOR_BASE_URL", "http://orchestrator:8080")
 _inference_base = os.getenv("INFERENCE_BASE_URL", "http://inference:8087")
 _auth_base = os.getenv("AUTH_BASE_URL", "http://auth:8088")
+_comms_base = os.getenv("COMMS_BASE_URL", "http://unison-comms:8080")
 
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
 _test_mode = os.getenv("UNISON_RENDERER_TEST_MODE", os.getenv("UNISON_UI_TEST_MODE", "false")).lower() in {"1", "true", "yes", "on"}
@@ -642,6 +643,53 @@ def session_lock():
         raise
     except httpx.RequestError as exc:
         raise HTTPException(status_code=503, detail="Lock service is temporarily unavailable") from exc
+
+
+def _trusted_proxy_headers() -> Dict[str, str]:
+    token = get_current_principal_token()
+    if not token:
+        raise HTTPException(status_code=401, detail="trusted local session required")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _proxy_channel(method: str, base: str, path: str, body: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    try:
+        with httpx.Client(timeout=35.0) as client:
+            response = client.request(
+                method, f"{base}{path}", json=body, headers=_trusted_proxy_headers()
+            )
+        payload = response.json() if response.content else {}
+        if response.status_code >= 400:
+            raise HTTPException(status_code=response.status_code, detail=payload.get("detail", "channel request denied"))
+        return payload
+    except HTTPException:
+        raise
+    except (httpx.RequestError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="remote channel is temporarily unavailable") from exc
+
+
+@app.post("/remote-assistant/telegram/register", status_code=201)
+def register_remote_telegram(body: Dict[str, Any] = Body(...)):
+    return _proxy_channel("POST", _comms_base, "/channel-gateway/accounts/telegram", body)
+
+
+@app.post("/remote-assistant/telegram/pair", status_code=201)
+def pair_remote_telegram(body: Dict[str, Any] = Body(...)):
+    return _proxy_channel("POST", _auth_base, "/channels/pairing", {
+        "provider": "telegram", "provider_account_id": body.get("provider_account_id"), "ttl_minutes": 10,
+    })
+
+
+@app.post("/remote-assistant/telegram/check")
+def check_remote_telegram(body: Dict[str, Any] = Body(...)):
+    return _proxy_channel("POST", _comms_base, "/channel-gateway/poll", body)
+
+
+@app.delete("/remote-assistant/telegram/{provider_account_id}")
+def revoke_remote_telegram(provider_account_id: str):
+    return _proxy_channel(
+        "DELETE", _comms_base, f"/channel-gateway/accounts/{provider_account_id}"
+    )
 
 
 @app.get("/session/recovery/status")
