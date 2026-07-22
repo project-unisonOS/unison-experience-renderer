@@ -361,6 +361,33 @@
           </fieldset>
           <button id="householdCancel" class="action-btn" type="button">Cancel household changes</button>
         </section>
+        <section id="remoteAssistantControls" aria-labelledby="remoteAssistantHeading">
+          <h2 id="remoteAssistantHeading">Remote assistant</h2>
+          <p id="telegramPrivacyDisclosure">Telegram is a low-assurance convenience channel. Telegram can process your message content and account, chat, network, and delivery metadata. Bot chats are not end-to-end encrypted to this UnisonOS device. Do not send passwords, recovery codes, financial details, medical records, or other secrets.</p>
+          <p id="telegramBoundaryHelp">Only private one-to-one chats are accepted. Sensitive, recovery, and consequential requests must continue on your trusted local device. Each household member needs an independent bot credential and pairing.</p>
+          <fieldset>
+            <legend>Connect your Telegram bot</legend>
+            <label for="telegramAccountId">Provider account name</label>
+            <input id="telegramAccountId" class="wakeword-input bootstrap-input" type="text" autocomplete="off" />
+            <label for="telegramBotId">Bot identifier</label>
+            <input id="telegramBotId" class="wakeword-input bootstrap-input" type="text" autocomplete="off" />
+            <label for="telegramBotToken">Bot token</label>
+            <input id="telegramBotToken" class="wakeword-input bootstrap-input" type="password" autocomplete="new-password" aria-describedby="telegramPrivacyDisclosure" />
+            <label><input id="telegramDisclosureAccepted" type="checkbox" /> I understand Telegram is a third-party, low-assurance relay and I will not send secrets through it.</label>
+            <button id="telegramRegister" class="action-btn" type="button">Store my encrypted bot credential</button>
+            <button id="telegramPair" class="action-btn" type="button">Create one-use pairing code with local step-up</button>
+            <output id="telegramPairingCode" aria-live="polite" aria-atomic="true">No pairing code has been created.</output>
+            <button id="telegramCheck" class="action-btn" type="button">Check private-chat connection</button>
+          </fieldset>
+          <fieldset>
+            <legend>Disconnect or recover</legend>
+            <p>If the token may be stolen, revoke it with BotFather, revoke it here, create a new token, and pair again. Disconnect never transfers or silently reuses a binding.</p>
+            <label><input id="telegramRevokeConfirmed" type="checkbox" /> Revoke this channel and clear its stored credential.</label>
+            <button id="telegramRevoke" class="action-btn" type="button">Revoke Telegram channel</button>
+            <button id="telegramCancel" class="action-btn" type="button">Cancel remote-channel changes</button>
+          </fieldset>
+          <output id="telegramOutcome" role="status" aria-live="polite" aria-atomic="true">Telegram is not connected.</output>
+        </section>
         <section id="trustDecision" aria-labelledby="trustDecisionHeading" hidden>
           <h2 id="trustDecisionHeading">Review what Unison proposes</h2>
           <p id="trustDecisionSummary" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -393,6 +420,7 @@
     <script type="module" src="/static/app.js"></script>
     <script type="module" src="/static/contextPrivacy.js"></script>
     <script type="module" src="/static/householdProof.js"></script>
+    <script type="module" src="/static/remoteAssistant.js"></script>
     <script type="module" src="/static/trustDecision.js"></script>
   </body>
 </html>
