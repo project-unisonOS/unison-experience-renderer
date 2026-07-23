@@ -6,6 +6,7 @@ import { createEventStream } from "./events.js";
 import { fetchPreferences } from "./preferences.js";
 import { SceneTypes, createScene, TransitionKinds, createTransition } from "./sceneGraph.js";
 import { createSpeechCapture } from "./speechCapture.js";
+import { applyAdaptivePreferences, negotiateModalities } from "./modalityNegotiation.js";
 
 const field = document.getElementById("field");
 const glyph = document.getElementById("glyph");
@@ -39,6 +40,8 @@ const wakewordInput = document.getElementById("wakewordInput");
 const wakewordOnAction = document.getElementById("wakewordOnAction");
 const wakewordOffAction = document.getElementById("wakewordOffAction");
 const finishAction = document.getElementById("finishAction");
+const liveCaption = document.getElementById("liveCaption");
+const cancelSpeechAction = document.getElementById("cancelSpeechAction");
 
 const modalities = {
   visual: createVisualAdapter({ field, glyph, logo, question, quietLabel }),
@@ -52,11 +55,30 @@ async function boot() {
   await maybeShowWatermark();
   const personId = new URLSearchParams(window.location.search).get("person_id") || null;
   const preferences = await fetchPreferences({ personId });
+  applyAdaptivePreferences(document.documentElement, preferences);
   const activePersonId = personId;
   modalities.audio = createAudioAdapter(preferences);
   modalities.haptic = createHapticAdapter(preferences);
   const composer = createComposer({ preferences });
-  const speechCapture = createSpeechCapture();
+  const speechCapture = createSpeechCapture({
+    onTranscript: (message) => {
+      if (liveCaption) {
+        liveCaption.textContent = message.text || "";
+        liveCaption.dataset.final = message.is_final === true ? "true" : "false";
+      }
+    },
+    onBargeIn: () => {
+      if (liveCaption) liveCaption.textContent = "Speech stopped. Listening.";
+    },
+  });
+  const modalityPlan = negotiateModalities({
+    available: ["visual", "speech", "captions", "keyboard"],
+    required: preferences.requiredModalities,
+    avoided: preferences.avoidedModalities,
+  });
+  if (cancelSpeechAction) {
+    cancelSpeechAction.onclick = () => speechCapture.cancelTts();
+  }
   let speechStarted = false;
   let startupPollingActive = false;
   let onboardingState = null;
@@ -71,6 +93,7 @@ async function boot() {
             wsUrl: payload.speech_ws_endpoint,
             endpointing: payload.endpointing || null,
             asrProfile: payload.asr_profile || null,
+            outputModes: modalityPlan.selected,
           }).catch(() => {
             speechStarted = false;
           });

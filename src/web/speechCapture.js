@@ -56,7 +56,7 @@ export function resolveSpeechWsUrl(rawUrl) {
   }
 }
 
-export function createSpeechCapture() {
+export function createSpeechCapture({ onTranscript, onBargeIn, onStatus } = {}) {
   let ws = null;
   let audioContext = null;
   let source = null;
@@ -66,7 +66,7 @@ export function createSpeechCapture() {
   let running = false;
   let sequence = 0;
 
-  const start = async ({ wsUrl, endpointing, asrProfile }) => {
+  const start = async ({ wsUrl, endpointing, asrProfile, outputModes }) => {
     if (running) return;
     running = true;
 
@@ -82,6 +82,14 @@ export function createSpeechCapture() {
             timestamp: Date.now(),
             endpointing: endpointing || null,
             asr_profile: asrProfile || null,
+          }),
+        );
+        ws.send(
+          JSON.stringify({
+            type: "control",
+            action: "set_output_modes",
+            output_modes: outputModes || ["captions", "visual"],
+            timestamp: Date.now(),
           }),
         );
       } catch (_) {}
@@ -125,6 +133,19 @@ export function createSpeechCapture() {
       sink.connect(audioContext.destination);
     };
 
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === "transcript" && typeof onTranscript === "function") {
+          onTranscript(message);
+        } else if (message.type === "barge_in" && typeof onBargeIn === "function") {
+          onBargeIn(message);
+        } else if ((message.type === "status" || message.type === "modality_status") && typeof onStatus === "function") {
+          onStatus(message);
+        }
+      } catch (_) {}
+    };
+
     ws.onerror = () => {};
     ws.onclose = () => {
       running = false;
@@ -166,5 +187,22 @@ export function createSpeechCapture() {
     stream = null;
   };
 
-  return { start, stop };
+  const cancelTts = () => {
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: "control", action: "cancel_tts", timestamp: Date.now() }));
+    }
+  };
+
+  const setOutputModes = (outputModes) => {
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({
+        type: "control",
+        action: "set_output_modes",
+        output_modes: outputModes,
+        timestamp: Date.now(),
+      }));
+    }
+  };
+
+  return { start, stop, cancelTts, setOutputModes };
 }

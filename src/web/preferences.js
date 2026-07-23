@@ -3,6 +3,11 @@ export function defaultPreferences() {
     presenceCueVisual: false,
     presenceCueAudio: false,
     hapticCues: false,
+    captions: true,
+    highContrast: matchMedia("(prefers-contrast: more)").matches,
+    simplifiedLanguage: false,
+    requiredModalities: ["keyboard"],
+    avoidedModalities: [],
     reduceMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
   };
 }
