@@ -53,6 +53,13 @@ try {
     "commitmentSpaceId",
     "commitmentCreate",
     "contextCancel",
+    "backupVerify",
+    "backupExport",
+    "recoveryCode",
+    "restoreScopeConfirmed",
+    "restoreDryRun",
+    "restoreStart",
+    "restoreCancel",
   ];
   for (const id of required) {
     const locator = page.locator(`#${id}`);
@@ -68,6 +75,11 @@ try {
   if ((await status.count()) !== 1) throw new Error("semantic live status is missing");
   const contextStatus = page.locator('#contextStatus[role="status"][aria-live="polite"]');
   if ((await contextStatus.count()) !== 1) throw new Error("context privacy live status is missing");
+  const backupStatus = page.locator('#backupStatus[role="status"][aria-live="polite"]');
+  const restoreStatus = page.locator('#restoreStatus[role="status"][aria-live="polite"]');
+  if ((await backupStatus.count()) !== 1 || (await restoreStatus.count()) !== 1) {
+    throw new Error("backup or restore live status is missing");
+  }
 
   await page.route("**/context/privacy-state", async (route) => {
     await route.fulfill({
@@ -94,6 +106,16 @@ try {
   const contextMessage = await contextStatus.textContent();
   if (!contextMessage?.includes("completed")) {
     throw new Error(`keyboard-native context creation status was: ${contextMessage || "empty"}`);
+  }
+  await page.locator("#recoveryCode").fill("UNISON1-SYNTHETIC-LOCAL-ONLY");
+  await page.locator("#restoreScopeConfirmed").check();
+  await page.locator("#restoreDryRun").click();
+  const restoreMessage = await restoreStatus.textContent();
+  if (!restoreMessage?.includes("Dry run ready")) {
+    throw new Error(`restore dry-run status was: ${restoreMessage || "empty"}`);
+  }
+  if ((await page.locator("#recoveryCode").inputValue()) !== "") {
+    throw new Error("recovery input was not cleared after use");
   }
   console.log(`[PASS] Phase 1/2 renderer accessibility: axe=0, controls=${required.length}, first-focus=${focused}`);
 } finally {

@@ -361,6 +361,30 @@
           </fieldset>
           <button id="householdCancel" class="action-btn" type="button">Cancel household changes</button>
         </section>
+        <section id="backupRecoveryControls" aria-labelledby="backupRecoveryHeading">
+          <h2 id="backupRecoveryHeading">Backup and replacement-device recovery</h2>
+          <p id="backupPrivacySummary">Backup is encrypted on this device before it reaches a provider. Every person and shared space has an independent key boundary. Your storage provider and household administrator cannot read private backup content.</p>
+          <p id="backupMetadataSummary">The provider may still observe opaque object identifiers, sizes, transfer timing, and the storage account or bucket. Provider-side physical deletion cannot be guaranteed.</p>
+          <fieldset>
+            <legend>Backup health</legend>
+            <button id="backupVerify" class="action-btn" type="button">Verify my latest backup</button>
+            <button id="backupExport" class="action-btn" type="button">Prepare my encrypted export</button>
+            <output id="backupStatus" role="status" aria-live="polite" aria-atomic="true">Backup status has not been checked.</output>
+          </fieldset>
+          <fieldset>
+            <legend>Plan a replacement-device restore</legend>
+            <p id="restoreAnchorHelp">A restore requires your recovery kit and a current independently held signed checkpoint. Unison refuses an unanchored or rolled-back restore.</p>
+            <label for="recoveryCode">Recovery code</label>
+            <input id="recoveryCode" class="wakeword-input bootstrap-input" type="password" inputmode="text" autocomplete="off" spellcheck="false" aria-describedby="restoreAnchorHelp recoveryCodeSafety" />
+            <p id="recoveryCodeSafety">Enter this only on your trusted local device. Do not say it aloud, send it through Telegram, or give it to a household administrator or storage provider.</p>
+            <label><input id="restoreScopeConfirmed" type="checkbox" /> I reviewed the person and shared spaces included in this restore.</label>
+            <button id="restoreDryRun" class="action-btn" type="button">Review restore without changing this device</button>
+            <button id="restoreStart" class="action-btn" type="button">Start verified restore</button>
+            <button id="restoreCancel" class="action-btn" type="button">Cancel or pause restore</button>
+            <output id="restoreStatus" role="status" aria-live="polite" aria-atomic="true">No restore has been planned.</output>
+          </fieldset>
+          <p>After activation, Unison enrolls this device, revokes the replaced device, rotates personal backup keys, and rewraps shared-space keys for current members.</p>
+        </section>
         <section id="remoteAssistantControls" aria-labelledby="remoteAssistantHeading">
           <h2 id="remoteAssistantHeading">Remote assistant</h2>
           <p id="telegramPrivacyDisclosure">Telegram is a low-assurance convenience channel. Telegram can process your message content and account, chat, network, and delivery metadata. Bot chats are not end-to-end encrypted to this UnisonOS device. Do not send passwords, recovery codes, financial details, medical records, or other secrets.</p>
@@ -421,6 +445,7 @@
     <script type="module" src="/static/contextPrivacy.js"></script>
     <script type="module" src="/static/householdProof.js"></script>
     <script type="module" src="/static/remoteAssistant.js"></script>
+    <script type="module" src="/static/backupRecovery.js"></script>
     <script type="module" src="/static/trustDecision.js"></script>
   </body>
 </html>

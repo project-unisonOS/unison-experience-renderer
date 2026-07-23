@@ -56,6 +56,7 @@ _orchestrator_base = os.getenv("ORCHESTRATOR_BASE_URL", "http://orchestrator:808
 _inference_base = os.getenv("INFERENCE_BASE_URL", "http://inference:8087")
 _auth_base = os.getenv("AUTH_BASE_URL", "http://auth:8088")
 _comms_base = os.getenv("COMMS_BASE_URL", "http://unison-comms:8080")
+_storage_base = os.getenv("STORAGE_BASE_URL", "http://unison-storage:8082")
 
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
 _test_mode = os.getenv("UNISON_RENDERER_TEST_MODE", os.getenv("UNISON_UI_TEST_MODE", "false")).lower() in {"1", "true", "yes", "on"}
@@ -83,6 +84,38 @@ def _startup_refresh():
 @app.get("/", response_class=FileResponse)
 def renderer_surface():
     return FileResponse(str(_web_root / "index.html"))
+
+
+@app.get("/backup/status")
+def backup_status():
+    """Return a privacy-minimized semantic backup status for the current person."""
+
+    if _disable_auth:
+        return {
+            "status": "not-configured",
+            "detail": "Backup is not configured in this evaluation profile.",
+            "provider_can_decrypt": False,
+            "household_admin_can_decrypt": False,
+        }
+    token = get_current_principal_token()
+    if not token:
+        raise HTTPException(status_code=401, detail="trusted local session required")
+    try:
+        response = httpx.get(
+            f"{_storage_base}/backup/status",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=3.0,
+        )
+        response.raise_for_status()
+        result = response.json()
+    except Exception:
+        return {
+            "status": "unavailable",
+            "detail": "Backup status is temporarily unavailable. No backup was deleted or replaced.",
+            "provider_can_decrypt": False,
+            "household_admin_can_decrypt": False,
+        }
+    return redact_obj(result)
 
 
 @app.get("/health")
