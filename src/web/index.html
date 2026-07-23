@@ -26,6 +26,31 @@
         overflow: hidden;
       }
 
+      html[data-high-contrast="true"] {
+        --field-fg: #fff;
+        --muted-fg: #fff;
+      }
+
+      html[data-high-contrast="true"] .action-btn {
+        border-color: currentColor;
+      }
+
+      html[data-simplified-language="true"] .advanced-detail {
+        display: none;
+      }
+
+      .live-caption {
+        position: absolute;
+        left: 50%;
+        top: 18px;
+        transform: translateX(-50%);
+        width: min(72ch, 90vw);
+        text-align: center;
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.82);
+        color: #fff;
+      }
+
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
       }
@@ -228,12 +253,14 @@
   </head>
   <body>
     <main id="field" role="main" data-scene="presence">
+      <output id="liveCaption" class="live-caption" aria-live="polite" aria-atomic="true"></output>
       <div class="center" aria-hidden="true">
         <img id="logo" class="logo" alt="" />
         <div id="glyph" class="glyph"></div>
         <div id="question" class="question"></div>
       </div>
       <div id="actions" class="actions" aria-live="polite">
+        <button id="cancelSpeechAction" class="action-btn" type="button">Stop speech</button>
         <button id="refreshAction" class="action-btn" type="button">Recheck</button>
         <label for="bootstrapDisplayName">Your display name</label>
         <input id="bootstrapDisplayName" class="wakeword-input bootstrap-input" type="text" maxlength="80" autocomplete="name" />
