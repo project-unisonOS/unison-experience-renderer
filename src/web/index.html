@@ -412,6 +412,49 @@
           </fieldset>
           <output id="telegramOutcome" role="status" aria-live="polite" aria-atomic="true">Telegram is not connected.</output>
         </section>
+        <section id="workflowControls" aria-labelledby="workflowHeading">
+          <h2 id="workflowHeading">Assistant workflow review</h2>
+          <p id="workflowBoundaryHelp">Unison uses only the selected context spaces and shows external recipients and disclosed fields before acting. Email, document, and website instructions are treated as untrusted content, never authority.</p>
+          <fieldset>
+            <legend>Plan a bounded workflow</legend>
+            <label for="workflowKind">Workflow</label>
+            <select id="workflowKind">
+              <option value="calendar_coordination">Coordinate a calendar event</option>
+              <option value="email_triage_draft">Triage email and prepare a draft</option>
+              <option value="reminder_commitment_review">Review commitments and reminders</option>
+              <option value="household_coordination">Coordinate a shared household artifact</option>
+              <option value="contact_recall">Recall relationship-aware contact context</option>
+              <option value="document_web_research">Research documents and websites</option>
+              <option value="travel_planning">Compare travel plans</option>
+            </select>
+            <label for="workflowPurpose">Purpose</label>
+            <input id="workflowPurpose" class="wakeword-input bootstrap-input" type="text" value="Return administrative time" />
+            <label for="workflowContext">Authorized context space</label>
+            <input id="workflowContext" class="wakeword-input bootstrap-input" type="text" value="private-current-person" aria-describedby="workflowBoundaryHelp" />
+            <label for="workflowRecipients">External recipients, if any</label>
+            <input id="workflowRecipients" class="wakeword-input bootstrap-input" type="text" />
+            <button id="workflowPlan" class="action-btn" type="button">Review workflow plan</button>
+          </fieldset>
+          <section aria-labelledby="workflowPlanHeading">
+            <h3 id="workflowPlanHeading">Inspectable plan</h3>
+            <output id="workflowPlanSummary" aria-live="polite" aria-atomic="true">No workflow has been planned.</output>
+            <label><input id="workflowApproval" type="checkbox" /> I approve the exact action, recipients, context, and disclosed fields shown above.</label>
+            <button id="workflowRun" class="action-btn" type="button">Run approved workflow</button>
+            <button id="workflowCancel" class="action-btn" type="button">Cancel and compensate</button>
+          </section>
+          <section aria-labelledby="workflowRecoveryHeading">
+            <h3 id="workflowRecoveryHeading">Failure and recovery</h3>
+            <p>A timeout or partial provider failure does not silently duplicate an action. Retry uses the same idempotency key; provider replacement preserves the plan and audit.</p>
+            <button id="workflowRetry" class="action-btn" type="button">Retry failed step safely</button>
+            <button id="workflowReplaceProvider" class="action-btn" type="button">Use compatible replacement provider</button>
+            <output id="workflowStatus" role="status" aria-live="polite" aria-atomic="true">No workflow is running.</output>
+          </section>
+          <section aria-labelledby="workflowOutcomeHeading">
+            <h3 id="workflowOutcomeHeading">Locally inspectable outcome</h3>
+            <output id="workflowOutcome" role="status" aria-live="polite" aria-atomic="true">No outcome evidence is available.</output>
+            <p>Success measures time returned, commitments and administrative tasks completed, interruptions avoided, recoveries, minimized external calls, accessible completion, and zero privacy-boundary incidents. Advertising, sponsored placement, engagement, and provider lock-in are never ranking signals.</p>
+          </section>
+        </section>
         <section id="trustDecision" aria-labelledby="trustDecisionHeading" hidden>
           <h2 id="trustDecisionHeading">Review what Unison proposes</h2>
           <p id="trustDecisionSummary" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -446,6 +489,7 @@
     <script type="module" src="/static/householdProof.js"></script>
     <script type="module" src="/static/remoteAssistant.js"></script>
     <script type="module" src="/static/backupRecovery.js"></script>
+    <script type="module" src="/static/phase7Workflows.js"></script>
     <script type="module" src="/static/trustDecision.js"></script>
   </body>
 </html>

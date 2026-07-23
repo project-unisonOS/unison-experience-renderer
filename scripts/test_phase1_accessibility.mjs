@@ -60,6 +60,16 @@ try {
     "restoreDryRun",
     "restoreStart",
     "restoreCancel",
+    "workflowKind",
+    "workflowPurpose",
+    "workflowContext",
+    "workflowRecipients",
+    "workflowPlan",
+    "workflowApproval",
+    "workflowRun",
+    "workflowCancel",
+    "workflowRetry",
+    "workflowReplaceProvider",
   ];
   for (const id of required) {
     const locator = page.locator(`#${id}`);
@@ -79,6 +89,11 @@ try {
   const restoreStatus = page.locator('#restoreStatus[role="status"][aria-live="polite"]');
   if ((await backupStatus.count()) !== 1 || (await restoreStatus.count()) !== 1) {
     throw new Error("backup or restore live status is missing");
+  }
+  const workflowStatus = page.locator('#workflowStatus[role="status"][aria-live="polite"]');
+  const workflowOutcome = page.locator('#workflowOutcome[role="status"][aria-live="polite"]');
+  if ((await workflowStatus.count()) !== 1 || (await workflowOutcome.count()) !== 1) {
+    throw new Error("workflow status or outcome evidence is missing");
   }
 
   await page.route("**/context/privacy-state", async (route) => {
@@ -116,6 +131,16 @@ try {
   }
   if ((await page.locator("#recoveryCode").inputValue()) !== "") {
     throw new Error("recovery input was not cleared after use");
+  }
+  await page.locator("#workflowPlan").click();
+  await page.locator("#workflowApproval").check();
+  await page.locator("#workflowRun").click();
+  if (!(await workflowOutcome.textContent())?.includes("Boundary incidents: 0")) {
+    throw new Error("workflow outcome evidence did not report the boundary result");
+  }
+  await page.locator("#workflowCancel").click();
+  if (!(await workflowStatus.textContent())?.includes("compensated")) {
+    throw new Error("workflow cancellation did not expose compensation");
   }
   console.log(`[PASS] Phase 1/2 renderer accessibility: axe=0, controls=${required.length}, first-focus=${focused}`);
 } finally {
