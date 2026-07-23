@@ -1,5 +1,13 @@
 # Accessibility and Modality Independence
 
+## Backup and replacement restore
+
+Phase 6 exposes labelled keyboard-native backup verification, encrypted export,
+recovery-code entry, scope confirmation, dry run, start, pause/cancel, failure,
+and safe-resumption controls. Status uses semantic live regions, clears recovery
+input after use, and does not depend on color, visual QR, or voice. Provider and
+household-administrator limits are stated in text before recovery begins.
+
 Canonical reference: `../unison-experience-doctrine-canonical`
 
 This renderer assumes modality loss as normal: the screen may disappear; audio may be unavailable; haptics may not exist. Experiences must degrade gracefully.
