@@ -2,6 +2,7 @@ import os
 import time
 import json
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -59,6 +60,9 @@ _comms_base = os.getenv("COMMS_BASE_URL", "http://unison-comms:8080")
 _storage_base = os.getenv("STORAGE_BASE_URL", "http://unison-storage:8082")
 _maintenance_status_path = Path(
     os.getenv("UNISON_MAINTENANCE_STATUS_PATH", "/var/lib/unison/maintenance/wellbeing.json")
+)
+_maintenance_command_dir = Path(
+    os.getenv("UNISON_MAINTENANCE_COMMAND_DIR", "/var/lib/unison/maintenance/commands")
 )
 
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
@@ -151,6 +155,41 @@ def maintenance_wellbeing(request: Request):
         "community_proposals",
     }
     return redact_obj({key: result[key] for key in allowed if key in result})
+
+
+@app.post("/maintenance/decision")
+def maintenance_decision(request: Request, body: Dict[str, Any] = Body(...)):
+    """Queue an authenticated owner decision for Appliance Lifecycle."""
+    person_id = _bound_person_id(request)
+    if not _disable_auth:
+        context = get_bound_principal(request)
+        if "owner" not in context.roles and "admin" not in context.roles:
+            raise HTTPException(status_code=403, detail="Device owner authority is required")
+    decision = body.get("decision")
+    if decision not in {"grant", "revoke", "defer", "cancel"}:
+        raise HTTPException(status_code=422, detail="Unsupported maintenance decision")
+    allowed = {
+        "decision", "grant_id", "device_id", "action_classes", "not_before",
+        "expires_at", "max_actions", "max_downtime_seconds", "recommendation_id",
+        "defer_until",
+    }
+    command = {key: body[key] for key in allowed if key in body}
+    command["owner_person_id"] = person_id
+    canonical = json.dumps(command, sort_keys=True, separators=(",", ":")).encode()
+    command_id = hashlib.sha256(canonical).hexdigest()[:24]
+    command["command_id"] = command_id
+    _maintenance_command_dir.mkdir(parents=True, exist_ok=True)
+    temporary = _maintenance_command_dir / f".{command_id}.tmp"
+    destination = _maintenance_command_dir / f"{command_id}.json"
+    temporary.write_text(json.dumps(command, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, destination)
+    return {
+        "accepted": True,
+        "command_id": command_id,
+        "decision": decision,
+        "detail": "Your decision is queued for independent Lifecycle verification.",
+    }
 
 
 @app.get("/health")
