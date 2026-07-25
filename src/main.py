@@ -194,6 +194,22 @@ def life_connection_disconnect(connection_id: str, request: Request):
     return _storage_life_request(request, "DELETE", f"/v1/connections/{connection_id}")
 
 
+_DOMAIN_PROXY_PATHS = frozenset({
+    "records", "household/reconcile-product", "household/attention", "household/repair-brief",
+    "household/procedure-brief",
+    "health/fhir", "health/safety", "health/timeline", "health/contradictions", "health/visit-brief",
+    "health/emergency-summary", "health/trend", "finance/reconcile", "finance/attention", "finance/forecast",
+    "finance/household-view", "finance/weekly-brief", "drafts", "links", "attention", "pilots", "packets",
+})
+
+
+@app.api_route("/life-domains/{domain_path:path}", methods=["GET", "POST"])
+def life_domain_proxy(domain_path: str, request: Request, body: Dict[str, Any] | None = Body(default=None)):
+    if domain_path not in _DOMAIN_PROXY_PATHS:
+        raise HTTPException(status_code=404, detail="Unsupported private domain operation")
+    return _storage_life_request(request, request.method, f"/v1/domain/{domain_path}", body)
+
+
 @app.get("/maintenance/wellbeing")
 def maintenance_wellbeing(request: Request):
     """Return the privacy-minimized Lifecycle wellbeing projection."""
