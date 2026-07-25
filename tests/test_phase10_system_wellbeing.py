@@ -22,6 +22,8 @@ def test_system_wellbeing_surface_is_semantic_and_non_executing():
         "wellbeingStatus",
         "wellbeingDimensions",
         "maintenanceRecommendations",
+        "maintenanceHistory",
+        "communityProposals",
     ):
         assert f'id="{identifier}"' in HTML
     assert 'role="status" aria-live="polite"' in HTML
@@ -65,9 +67,23 @@ def test_wellbeing_projection_is_allowlisted(monkeypatch, tmp_path):
             "requires_confirmation": True,
         }],
         "privacy": {"personal_content_collected": False},
+        "maintenance_history": [{
+            "receipt_id": "receipt-1",
+            "result": "rolled-back",
+            "completed_at": "2026-07-25T01:00:00Z",
+            "checkpoint_id": "checkpoint-1",
+        }],
+        "community_proposals": [{
+            "subject": "model-runtime",
+            "statement": "A corroborated local test may improve latency.",
+            "source_count": 2,
+            "authority": "test-proposal-only",
+        }],
         "private_debug": "Alice's message subject",
     }))
     monkeypatch.setattr(renderer, "_maintenance_status_path", path)
     body = TestClient(renderer.app).get("/maintenance/wellbeing").json()
     assert "private_debug" not in body
     assert body["recommendations"][0]["authority"] == "recommend"
+    assert body["maintenance_history"][0]["result"] == "rolled-back"
+    assert body["community_proposals"][0]["authority"] == "test-proposal-only"
