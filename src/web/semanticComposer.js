@@ -27,6 +27,16 @@ function validateSem(sem) {
   return nodeIds;
 }
 
+function equivalenceMetadata(sem) {
+  const actionRisk = Object.fromEntries((sem.actions || []).map((action) => [action.action_id, action.risk || "low"]));
+  const provenance = [...allNodes(sem), ...(sem.actions || [])]
+    .flatMap((item) => Array.isArray(item.provenance) ? item.provenance : [])
+    .map((item) => item.source_id)
+    .filter((value, index, values) => typeof value === "string" && values.indexOf(value) === index)
+    .sort();
+  return { action_risk: actionRisk, provenance_source_ids: provenance };
+}
+
 export function composeConversation(sem) {
   validateSem(sem);
   const nodes = allNodes(sem);
@@ -47,6 +57,7 @@ export function composeConversation(sem) {
     ],
     action_ids: (sem.actions || []).map((action) => action.action_id),
     required_node_ids: required.map((node) => node.node_id),
+    ...equivalenceMetadata(sem),
     fallback: sem.recovery || "I can provide the essential outcome as plain text.",
   };
   return {
@@ -83,6 +94,7 @@ export function composeVisual(sem) {
     segments: nodes.map((node) => ({ kind: node.kind, node_id: node.node_id, label: node.label, text: nodeText(node), exact: node.exact === true })),
     action_ids: (sem.actions || []).map((action) => action.action_id),
     required_node_ids: required.map((node) => node.node_id),
+    ...equivalenceMetadata(sem),
     fallback: sem.recovery || "The essential outcome remains available as text.",
   };
 }
@@ -96,6 +108,10 @@ export function semanticDiff(left, right) {
   };
   compare("required-meaning", left.required_node_ids || [], right.required_node_ids || []);
   compare("available-actions", left.action_ids || [], right.action_ids || []);
+  compare("provenance", left.provenance_source_ids || [], right.provenance_source_ids || []);
+  const leftRisk = JSON.stringify(left.action_risk || {}, Object.keys(left.action_risk || {}).sort());
+  const rightRisk = JSON.stringify(right.action_risk || {}, Object.keys(right.action_risk || {}).sort());
+  if (leftRisk !== rightRisk) findings.push({ severity: "error", code: "action-risk" });
   if (Boolean(left.fallback) !== Boolean(right.fallback)) findings.push({ severity: "error", code: "recovery" });
   return { equivalent: findings.length === 0, findings };
 }

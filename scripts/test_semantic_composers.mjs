@@ -7,7 +7,7 @@ const sem = {
     { node_id: "conflicts", kind: "value", label: "Conflicts", value: 2, summary: "Two meetings overlap", detail: "Design review overlaps the dentist appointment", required: true, exact: true },
     { node_id: "option", kind: "entity", label: "Second option", summary: "Move design review", detail: "Move design review to 3 PM", required: false, exact: false },
   ],
-  actions: [{ action_id: "move", label: "Move design review", consequence: "Proposes 3 PM", confirmation_required: true }],
+  actions: [{ action_id: "move", label: "Move design review", consequence: "Proposes 3 PM", confirmation_required: true, risk: "medium", provenance: [{ source_id: "calendar-api" }] }],
   recovery: "Keep the calendar unchanged",
 };
 
@@ -32,5 +32,7 @@ assert.equal(session.semanticFocus, "conflicts");
 assert.deepEqual(session.pendingActionIds, ["move"]);
 assert.equal(session.recovery, sem.recovery);
 assert.equal(semanticDiff(conversation.expression, { ...visual, required_node_ids: [] }).equivalent, false);
+assert.equal(semanticDiff(conversation.expression, { ...visual, action_risk: { move: "low" } }).equivalent, false);
+assert.equal(semanticDiff(conversation.expression, { ...visual, provenance_source_ids: [] }).equivalent, false);
 
 console.log("semantic composer conformance passed");
