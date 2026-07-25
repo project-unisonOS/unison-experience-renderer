@@ -3,6 +3,8 @@ const byId = (id) => document.getElementById(id);
 const status = byId("wellbeingStatus");
 const dimensions = byId("wellbeingDimensions");
 const recommendations = byId("maintenanceRecommendations");
+const history = byId("maintenanceHistory");
+const community = byId("communityProposals");
 
 function text(value, fallback) {
   return typeof value === "string" && value.trim() ? value : fallback;
@@ -50,6 +52,38 @@ function renderRecommendations(items) {
   });
 }
 
+function renderHistory(items) {
+  history.replaceChildren();
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) {
+    const item = document.createElement("li");
+    item.textContent = "No bounded maintenance action has been recorded.";
+    history.append(item);
+    return;
+  }
+  safeItems.forEach((entry) => {
+    const item = document.createElement("li");
+    item.textContent = `${text(entry.result, "unknown")} at ${text(entry.completed_at, "an unknown time")}. Checkpoint: ${text(entry.checkpoint_id, "not recorded")}.`;
+    history.append(item);
+  });
+}
+
+function renderCommunity(items) {
+  community.replaceChildren();
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) {
+    const item = document.createElement("li");
+    item.textContent = "No corroborated community test proposal is available.";
+    community.append(item);
+    return;
+  }
+  safeItems.forEach((entry) => {
+    const item = document.createElement("li");
+    item.textContent = `${text(entry.subject, "Improvement idea")}: ${text(entry.statement, "No claim detail available.")} Sources: ${Number(entry.source_count) || 0}. Authority: test proposal only.`;
+    community.append(item);
+  });
+}
+
 byId("wellbeingRefresh")?.addEventListener("click", async () => {
   status.textContent = "Checking the privacy-minimized local health summary.";
   try {
@@ -62,9 +96,13 @@ byId("wellbeingRefresh")?.addEventListener("click", async () => {
     status.textContent = text(result.summary, "System wellbeing check complete.");
     renderDimensions(result.dimensions);
     renderRecommendations(result.recommendations);
+    renderHistory(result.maintenance_history);
+    renderCommunity(result.community_proposals);
   } catch {
     status.textContent = "System wellbeing is temporarily unavailable. No maintenance action was taken.";
     renderDimensions([]);
     renderRecommendations([]);
+    renderHistory([]);
+    renderCommunity([]);
   }
 });

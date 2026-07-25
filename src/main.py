@@ -147,7 +147,8 @@ def maintenance_wellbeing(request: Request):
         raise HTTPException(status_code=502, detail="Maintenance status failed its privacy contract")
     allowed = {
         "status", "summary", "observed_at", "dimensions", "recommendations",
-        "privacy", "autonomy", "next_check",
+        "privacy", "autonomy", "next_check", "maintenance_history",
+        "community_proposals",
     }
     return redact_obj({key: result[key] for key in allowed if key in result})
 
