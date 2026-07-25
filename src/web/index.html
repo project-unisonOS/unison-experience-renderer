@@ -531,6 +531,31 @@
             <p>Success measures time returned, commitments and administrative tasks completed, interruptions avoided, recoveries, minimized external calls, accessible completion, and zero privacy-boundary incidents. Advertising, sponsored placement, engagement, and provider lock-in are never ranking signals.</p>
           </section>
         </section>
+        <section id="lifeOperationsControls" aria-labelledby="lifeOperationsHeading">
+          <h2 id="lifeOperationsHeading">Private sources and connections</h2>
+          <p id="lifeOperationsHelp">You can add a document, scan pages with your camera, or connect a read-only source through conversation. New material stays private until you review it. Document instructions are treated as untrusted content and never gain authority.</p>
+          <fieldset>
+            <legend>Add documents or images</legend>
+            <label for="lifeSourceFiles">Choose one or more files</label>
+            <input id="lifeSourceFiles" type="file" multiple accept=".pdf,.txt,.csv,.json,.zip,image/jpeg,image/png" aria-describedby="lifeOperationsHelp" />
+            <label for="lifeCameraPages">Scan one or more pages</label>
+            <input id="lifeCameraPages" type="file" multiple accept="image/*" capture="environment" aria-describedby="lifeOperationsHelp" />
+            <button id="lifeImportPreview" class="action-btn" type="button">Review selected sources</button>
+            <button id="lifeImportAdmit" class="action-btn" type="button">Keep these sources privately</button>
+            <output id="lifeImportStatus" role="status" aria-live="polite" aria-atomic="true">No import is in progress.</output>
+            <ol id="lifeImportPreviewList"></ol>
+          </fieldset>
+          <fieldset>
+            <legend>Connect an account or bounded source</legend>
+            <label for="lifeProvider">Source</label>
+            <select id="lifeProvider" aria-describedby="lifeConnectionScope"></select>
+            <p id="lifeConnectionScope">Connections request only the displayed read-only scopes. Unison stores credentials behind an opaque local vault handle.</p>
+            <button id="lifeConnectionStart" class="action-btn" type="button">Start guided connection</button>
+            <button id="lifeConnectionsRefresh" class="action-btn" type="button">Review connections and imports</button>
+            <output id="lifeConnectionStatus" role="status" aria-live="polite" aria-atomic="true">No connection setup is in progress.</output>
+            <ul id="lifeConnectionList"></ul>
+          </fieldset>
+        </section>
         <section id="trustDecision" aria-labelledby="trustDecisionHeading" hidden>
           <h2 id="trustDecisionHeading">Review what Unison proposes</h2>
           <p id="trustDecisionSummary" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -568,5 +593,6 @@
     <script type="module" src="/static/systemWellbeing.js"></script>
     <script type="module" src="/static/phase7Workflows.js"></script>
     <script type="module" src="/static/trustDecision.js"></script>
+    <script type="module" src="/static/lifeOperations.js"></script>
   </body>
 </html>

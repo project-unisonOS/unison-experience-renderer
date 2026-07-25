@@ -125,6 +125,75 @@ def backup_status():
     return redact_obj(result)
 
 
+def _storage_life_request(request: Request, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Proxy a principal-bound life operations request without exposing credentials to the browser."""
+    _bound_person_id(request, (payload or {}).get("person_id"))
+    headers = _context_auth_headers()
+    try:
+        response = httpx.request(method, f"{_storage_base}{path}", json=payload, headers=headers, timeout=10.0)
+        body = response.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Private source service unavailable") from exc
+    if response.status_code >= 400:
+        raise HTTPException(status_code=response.status_code, detail=body.get("detail", "Request rejected"))
+    return redact_obj(body)
+
+
+@app.get("/life-operations/catalog")
+def life_catalog(request: Request):
+    return _storage_life_request(request, "GET", "/v1/connections/catalog")
+
+
+@app.get("/life-operations/sources")
+def life_sources(request: Request):
+    return _storage_life_request(request, "GET", "/v1/sources")
+
+
+@app.post("/life-operations/imports")
+def life_import_start(request: Request, body: Dict[str, Any] = Body(...)):
+    return _storage_life_request(request, "POST", "/v1/imports", body)
+
+
+@app.post("/life-operations/imports/{session_id}/sources")
+def life_import_source(session_id: str, request: Request, body: Dict[str, Any] = Body(...)):
+    return _storage_life_request(request, "POST", f"/v1/imports/{session_id}/sources", body)
+
+
+@app.post("/life-operations/imports/{session_id}/admit")
+def life_import_admit(session_id: str, request: Request, body: Dict[str, Any] = Body(default={})):
+    return _storage_life_request(request, "POST", f"/v1/imports/{session_id}/admit", body)
+
+
+@app.patch("/life-operations/sources/{source_id}/fields/{field_id}")
+def life_source_correct(source_id: str, field_id: str, request: Request, body: Dict[str, Any] = Body(...)):
+    return _storage_life_request(request, "PATCH", f"/v1/sources/{source_id}/fields/{field_id}", body)
+
+
+@app.delete("/life-operations/sources/{source_id}")
+def life_source_delete(source_id: str, request: Request):
+    return _storage_life_request(request, "DELETE", f"/v1/sources/{source_id}")
+
+
+@app.get("/life-operations/connections")
+def life_connections(request: Request):
+    return _storage_life_request(request, "GET", "/v1/connections")
+
+
+@app.post("/life-operations/connections/oauth/start")
+def life_connection_start(request: Request, body: Dict[str, Any] = Body(...)):
+    return _storage_life_request(request, "POST", "/v1/connections/oauth/start", body)
+
+
+@app.post("/life-operations/connections/local")
+def life_connection_local(request: Request, body: Dict[str, Any] = Body(...)):
+    return _storage_life_request(request, "POST", "/v1/connections/local", body)
+
+
+@app.delete("/life-operations/connections/{connection_id}")
+def life_connection_disconnect(connection_id: str, request: Request):
+    return _storage_life_request(request, "DELETE", f"/v1/connections/{connection_id}")
+
+
 @app.get("/maintenance/wellbeing")
 def maintenance_wellbeing(request: Request):
     """Return the privacy-minimized Lifecycle wellbeing projection."""
