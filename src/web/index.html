@@ -556,6 +556,39 @@
             <ul id="lifeConnectionList"></ul>
           </fieldset>
         </section>
+        <section id="lifeDomainsControls" aria-labelledby="lifeDomainsHeading">
+          <h2 id="lifeDomainsHeading">Private life operations</h2>
+          <p id="lifeDomainsBoundary">Household, health, and financial records stay in separate private spaces. A cross-domain link requires your purpose, selected fields, recipients, and approval. Recommendations prepare drafts only. Unison does not diagnose, change treatment, move money, purchase, schedule service, or control a physical device.</p>
+          <fieldset>
+            <legend>Household operations</legend>
+            <p>Review return, warranty, renewal, maintenance, exact-product recall, procedure, and repair information with source citations and visible matching uncertainty.</p>
+            <button id="householdAttentionRefresh" class="action-btn" type="button">Review household deadlines</button>
+            <output id="householdLifeStatus" role="status" aria-live="polite" aria-atomic="true">Household attention has not been reviewed.</output>
+          </fieldset>
+          <fieldset>
+            <legend>Health timeline and visit preparation</legend>
+            <p id="healthSafetyBoundary">Unison preserves clinical and self-reported provenance. It does not diagnose, change medication, or dismiss urgent care. Potential emergency language produces deterministic guidance to seek appropriate human help.</p>
+            <button id="healthTimelineRefresh" class="action-btn" type="button" aria-describedby="healthSafetyBoundary">Review my cited health timeline</button>
+            <button id="healthContradictionsRefresh" class="action-btn" type="button">Review conflicting health sources</button>
+            <output id="healthLifeStatus" role="status" aria-live="polite" aria-atomic="true">Health information has not been reviewed.</output>
+          </fieldset>
+          <fieldset>
+            <legend>Financial attention</legend>
+            <p id="financeSafetyBoundary">Connections and imports are read-only. Categories and forecasts are labeled as inferred. Private accounts never enter household totals without your explicit contribution rule.</p>
+            <button id="financeAttentionRefresh" class="action-btn" type="button" aria-describedby="financeSafetyBoundary">Review financial exceptions</button>
+            <button id="financeForecastRefresh" class="action-btn" type="button">Review local cash-flow range</button>
+            <button id="financeBriefRefresh" class="action-btn" type="button">Prepare weekly cited brief</button>
+            <output id="financeLifeStatus" role="status" aria-live="polite" aria-atomic="true">Financial attention has not been reviewed.</output>
+          </fieldset>
+          <fieldset>
+            <legend>Unified private attention</legend>
+            <label for="lifeAttentionGoals">Goals to use for this review</label>
+            <input id="lifeAttentionGoals" class="wakeword-input bootstrap-input" type="text" aria-describedby="lifeDomainsBoundary" />
+            <button id="lifeAttentionRefresh" class="action-btn" type="button">Review prioritized attention</button>
+            <ol id="lifeAttentionList" aria-live="polite"></ol>
+            <output id="lifeAttentionStatus" role="status" aria-live="polite" aria-atomic="true">No cross-domain review has been requested.</output>
+          </fieldset>
+        </section>
         <section id="trustDecision" aria-labelledby="trustDecisionHeading" hidden>
           <h2 id="trustDecisionHeading">Review what Unison proposes</h2>
           <p id="trustDecisionSummary" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -594,5 +627,6 @@
     <script type="module" src="/static/phase7Workflows.js"></script>
     <script type="module" src="/static/trustDecision.js"></script>
     <script type="module" src="/static/lifeOperations.js"></script>
+    <script type="module" src="/static/lifeDomains.js"></script>
   </body>
 </html>
