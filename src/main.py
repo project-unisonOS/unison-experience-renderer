@@ -57,6 +57,9 @@ _inference_base = os.getenv("INFERENCE_BASE_URL", "http://inference:8087")
 _auth_base = os.getenv("AUTH_BASE_URL", "http://auth:8088")
 _comms_base = os.getenv("COMMS_BASE_URL", "http://unison-comms:8080")
 _storage_base = os.getenv("STORAGE_BASE_URL", "http://unison-storage:8082")
+_maintenance_status_path = Path(
+    os.getenv("UNISON_MAINTENANCE_STATUS_PATH", "/var/lib/unison/maintenance/wellbeing.json")
+)
 
 _wakeword_default = os.getenv("UNISON_WAKEWORD_DEFAULT", "unison")
 _test_mode = os.getenv("UNISON_RENDERER_TEST_MODE", os.getenv("UNISON_UI_TEST_MODE", "false")).lower() in {"1", "true", "yes", "on"}
@@ -116,6 +119,37 @@ def backup_status():
             "household_admin_can_decrypt": False,
         }
     return redact_obj(result)
+
+
+@app.get("/maintenance/wellbeing")
+def maintenance_wellbeing(request: Request):
+    """Return the privacy-minimized Lifecycle wellbeing projection."""
+    _bound_person_id(request)
+    try:
+        result = json.loads(_maintenance_status_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {
+            "status": "not-yet-observed",
+            "summary": "Unison has not collected a system wellbeing baseline yet.",
+            "dimensions": [],
+            "recommendations": [],
+            "privacy": {"personal_content_collected": False},
+        }
+    except (OSError, json.JSONDecodeError):
+        return {
+            "status": "unavailable",
+            "summary": "System wellbeing is temporarily unavailable. No maintenance action was taken.",
+            "dimensions": [],
+            "recommendations": [],
+            "privacy": {"personal_content_collected": False},
+        }
+    if not isinstance(result, dict) or result.get("privacy", {}).get("personal_content_collected") is not False:
+        raise HTTPException(status_code=502, detail="Maintenance status failed its privacy contract")
+    allowed = {
+        "status", "summary", "observed_at", "dimensions", "recommendations",
+        "privacy", "autonomy", "next_check",
+    }
+    return redact_obj({key: result[key] for key in allowed if key in result})
 
 
 @app.get("/health")

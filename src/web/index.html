@@ -388,6 +388,26 @@
           </fieldset>
           <button id="householdCancel" class="action-btn" type="button">Cancel household changes</button>
         </section>
+        <section id="systemWellbeingControls" aria-labelledby="systemWellbeingHeading">
+          <h2 id="systemWellbeingHeading">System wellbeing</h2>
+          <p>Unison privately checks security, reliability, performance, capacity, compatibility, and improvement opportunities. Operational measurements do not include your prompts, messages, contacts, document titles, or another person's private activity.</p>
+          <p id="maintenanceAutonomySummary">The default autonomy level is Recommend. Unison explains proposed changes and does not install, purchase, or alter hardware from this screen.</p>
+          <button id="wellbeingRefresh" class="action-btn" type="button">Check system wellbeing</button>
+          <output id="wellbeingStatus" role="status" aria-live="polite" aria-atomic="true">System wellbeing has not been checked.</output>
+          <section aria-labelledby="wellbeingDimensionsHeading">
+            <h3 id="wellbeingDimensionsHeading">Current indicators</h3>
+            <dl id="wellbeingDimensions">
+              <dt>Status</dt><dd>Waiting for a private local health summary.</dd>
+            </dl>
+          </section>
+          <section aria-labelledby="maintenanceRecommendationsHeading">
+            <h3 id="maintenanceRecommendationsHeading">Suggested adjustments</h3>
+            <ol id="maintenanceRecommendations">
+              <li>No recommendation is available until the local baseline is ready.</li>
+            </ol>
+            <p>Every suggestion must explain the measured need, exact hardware fit, expected benefit, security and privacy effects, cost, downtime, alternatives, uncertainty, and rollback. Community popularity alone is never sufficient evidence.</p>
+          </section>
+        </section>
         <section id="backupRecoveryControls" aria-labelledby="backupRecoveryHeading">
           <h2 id="backupRecoveryHeading">Backup and replacement-device recovery</h2>
           <p id="backupPrivacySummary">Backup is encrypted on this device before it reaches a provider. Every person and shared space has an independent key boundary. Your storage provider and household administrator cannot read private backup content.</p>
@@ -516,6 +536,7 @@
     <script type="module" src="/static/householdProof.js"></script>
     <script type="module" src="/static/remoteAssistant.js"></script>
     <script type="module" src="/static/backupRecovery.js"></script>
+    <script type="module" src="/static/systemWellbeing.js"></script>
     <script type="module" src="/static/phase7Workflows.js"></script>
     <script type="module" src="/static/trustDecision.js"></script>
   </body>
