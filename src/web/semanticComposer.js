@@ -87,3 +87,45 @@ export function composeVisual(sem) {
   };
 }
 
+export function semanticDiff(left, right) {
+  const findings = [];
+  const compare = (code, lhs, rhs) => {
+    const missing = [...new Set(lhs)].filter((value) => !new Set(rhs).has(value));
+    const added = [...new Set(rhs)].filter((value) => !new Set(lhs).has(value));
+    if (missing.length || added.length) findings.push({ severity: "error", code, missing, added });
+  };
+  compare("required-meaning", left.required_node_ids || [], right.required_node_ids || []);
+  compare("available-actions", left.action_ids || [], right.action_ids || []);
+  if (Boolean(left.fallback) !== Boolean(right.fallback)) findings.push({ severity: "error", code: "recovery" });
+  return { equivalent: findings.length === 0, findings };
+}
+
+export class ModalityNeutralSession {
+  constructor({ sessionId, personId }) {
+    this.sessionId = sessionId;
+    this.personId = personId;
+    this.semanticFocus = null;
+    this.dialogueReferences = {};
+    this.pendingActionIds = [];
+    this.progress = {};
+    this.recovery = null;
+    this.modality = null;
+    this.revision = 1;
+  }
+
+  capture({ focus, references = {}, pendingActionIds = [], progress = {}, recovery = null }) {
+    this.semanticFocus = focus;
+    this.dialogueReferences = { ...references };
+    this.pendingActionIds = [...pendingActionIds];
+    this.progress = { ...progress };
+    this.recovery = recovery;
+    this.revision += 1;
+  }
+
+  switchTo(sem, modality) {
+    const expression = modality === "conversation" ? composeConversation(sem).expression : composeVisual(sem);
+    this.modality = modality;
+    this.revision += 1;
+    return expression;
+  }
+}

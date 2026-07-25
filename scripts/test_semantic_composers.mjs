@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { composeConversation, composeVisual } from "../src/web/semanticComposer.js";
+import { ModalityNeutralSession, composeConversation, composeVisual, semanticDiff } from "../src/web/semanticComposer.js";
 
 const sem = {
   schema_version: "sem.v1", experience_id: "calendar", outcome: "You have two calendar conflicts",
@@ -23,5 +23,14 @@ assert.equal(conversation.resume(), sem.outcome);
 assert.equal(conversation.cancel("move"), "Cancelled Move design review");
 assert.equal(conversation.recover(), "Keep the calendar unchanged");
 assert.throws(() => composeVisual({ schema_version: "sem.v1" }), /invalid semantic experience/);
+assert.equal(semanticDiff(conversation.expression, visual).equivalent, true);
+const session = new ModalityNeutralSession({ sessionId: "s", personId: "p" });
+session.capture({ focus: "conflicts", references: { "1": "conflicts" }, pendingActionIds: ["move"], recovery: sem.recovery });
+const switched = session.switchTo(sem, "visual");
+assert.equal(switched.modality, "visual");
+assert.equal(session.semanticFocus, "conflicts");
+assert.deepEqual(session.pendingActionIds, ["move"]);
+assert.equal(session.recovery, sem.recovery);
+assert.equal(semanticDiff(conversation.expression, { ...visual, required_node_ids: [] }).equivalent, false);
 
 console.log("semantic composer conformance passed");
