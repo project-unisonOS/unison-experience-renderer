@@ -1,5 +1,6 @@
 import { clamp } from "./util.js";
 import { SceneTypes, TransitionKinds, createScene, createTransition } from "./sceneGraph.js";
+import { composeConversation, composeVisual } from "./semanticComposer.js";
 
 export function createComposer({ preferences }) {
   const reduceMotion = preferences.reduceMotion === true;
@@ -147,6 +148,22 @@ export function createComposer({ preferences }) {
 
     if (type === "rom.render") {
       const romPayload = payload && typeof payload === "object" ? payload : {};
+      const sem = romPayload.meta && typeof romPayload.meta === "object" ? romPayload.meta.semantic_experience : null;
+      if (sem) {
+        try {
+          const visual = composeVisual(sem);
+          const conversation = composeConversation(sem);
+          return {
+            scene: createScene(SceneTypes.OUTCOME_REFLECTED, { text: visual.summary, holdMs: reduceMotion ? 0 : 780, semantic: visual }),
+            transition: createTransition(TransitionKinds.DRIFT, durationMs),
+            conversation,
+            audio: { kind: "complete" },
+            haptic: { kind: "complete" },
+          };
+        } catch (_) {
+          // Continue through the compatibility path. Invalid SEM never suppresses the ROM fallback.
+        }
+      }
       const blocks = Array.isArray(romPayload.blocks) ? romPayload.blocks : [];
       const textBlock = blocks.find((b) => b && typeof b === "object" && b.type === "text" && typeof b.text === "string");
       const text = textBlock ? textBlock.text.trim() : "";
