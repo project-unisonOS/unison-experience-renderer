@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test:phase1-accessibility": "node scripts/test_phase1_accessibility.mjs",
-    "test:phase2-accessibility": "node scripts/test_phase1_accessibility.mjs"
+    "test:phase2-accessibility": "node scripts/test_phase1_accessibility.mjs",
+    "test:semantic-composers": "node scripts/test_semantic_composers.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
