@@ -1,5 +1,5 @@
 const byId = (id) => document.getElementById(id);
-const text = (id, value) => { const node = byId(id); if (node) node.textContent = value || "Not provided — Unison will not continue."; };
+const text = (id, value) => { const node = byId(id); if (node) node.textContent = value || "Not provided. Unison will not continue."; };
 
 export function renderTrustDecision(decision, request) {
   const section = byId("trustDecision");
