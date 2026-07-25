@@ -24,6 +24,10 @@ def test_system_wellbeing_surface_is_semantic_and_non_executing():
         "maintenanceRecommendations",
         "maintenanceHistory",
         "communityProposals",
+        "maintenanceGrant",
+        "maintenanceDefer",
+        "maintenanceRevoke",
+        "maintenanceDecisionStatus",
     ):
         assert f'id="{identifier}"' in HTML
     assert 'role="status" aria-live="polite"' in HTML
@@ -87,3 +91,37 @@ def test_wellbeing_projection_is_allowlisted(monkeypatch, tmp_path):
     assert body["recommendations"][0]["authority"] == "recommend"
     assert body["maintenance_history"][0]["result"] == "rolled-back"
     assert body["community_proposals"][0]["authority"] == "test-proposal-only"
+
+
+def test_owner_decision_is_queued_atomically(monkeypatch, tmp_path):
+    monkeypatch.setattr(renderer, "_maintenance_command_dir", tmp_path / "commands")
+    response = TestClient(renderer.app).post(
+        "/maintenance/decision",
+        json={
+            "decision": "grant",
+            "grant_id": "grant-1",
+            "device_id": "local-appliance",
+            "action_classes": ["service-restart"],
+            "not_before": "2026-07-25T00:00:00Z",
+            "expires_at": "2026-07-25T00:30:00Z",
+            "max_actions": 1,
+            "max_downtime_seconds": 120,
+            "private_prompt": "do not persist this",
+        },
+    )
+    assert response.status_code == 200
+    commands = list((tmp_path / "commands").glob("*.json"))
+    assert len(commands) == 1
+    command = json.loads(commands[0].read_text())
+    assert command["owner_person_id"] == "test-person"
+    assert "private_prompt" not in command
+    assert commands[0].stat().st_mode & 0o777 == 0o600
+
+
+def test_unsupported_decision_is_rejected(monkeypatch, tmp_path):
+    monkeypatch.setattr(renderer, "_maintenance_command_dir", tmp_path / "commands")
+    response = TestClient(renderer.app).post(
+        "/maintenance/decision", json={"decision": "execute"}
+    )
+    assert response.status_code == 422
+    assert not (tmp_path / "commands").exists()

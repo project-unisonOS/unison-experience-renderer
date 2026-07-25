@@ -394,6 +394,22 @@
           <p id="maintenanceAutonomySummary">The default autonomy level is Recommend. Unison explains proposed changes and does not install, purchase, or alter hardware from this screen.</p>
           <button id="wellbeingRefresh" class="action-btn" type="button">Check system wellbeing</button>
           <output id="wellbeingStatus" role="status" aria-live="polite" aria-atomic="true">System wellbeing has not been checked.</output>
+          <fieldset>
+            <legend>Review maintenance authority</legend>
+            <p id="maintenanceGrantHelp">A grant is limited to this device, the selected reversible action, a short time window, one action, a verified checkpoint, and at most two minutes of interruption. You can revoke it at any time.</p>
+            <label for="maintenanceActionClass">Reversible action</label>
+            <select id="maintenanceActionClass" aria-describedby="maintenanceGrantHelp">
+              <option value="service-restart">Restart an unhealthy service</option>
+              <option value="cache-housekeeping">Remove verified disposable cache data</option>
+              <option value="signed-patch-stage">Stage a signed security patch</option>
+              <option value="model-rollback">Restore the last-known-good model</option>
+              <option value="configuration-rollback">Restore the last-known-good configuration</option>
+            </select>
+            <button id="maintenanceGrant" class="action-btn" type="button">Grant one bounded action for 30 minutes</button>
+            <button id="maintenanceDefer" class="action-btn" type="button">Defer the current suggestion</button>
+            <button id="maintenanceRevoke" class="action-btn" type="button">Revoke maintenance authority</button>
+            <output id="maintenanceDecisionStatus" role="status" aria-live="polite" aria-atomic="true">No maintenance decision is pending.</output>
+          </fieldset>
           <section aria-labelledby="wellbeingDimensionsHeading">
             <h3 id="wellbeingDimensionsHeading">Current indicators</h3>
             <dl id="wellbeingDimensions">

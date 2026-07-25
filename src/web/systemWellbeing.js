@@ -5,6 +5,9 @@ const dimensions = byId("wellbeingDimensions");
 const recommendations = byId("maintenanceRecommendations");
 const history = byId("maintenanceHistory");
 const community = byId("communityProposals");
+const decisionStatus = byId("maintenanceDecisionStatus");
+let currentGrantId = null;
+let currentRecommendationId = null;
 
 function text(value, fallback) {
   return typeof value === "string" && value.trim() ? value : fallback;
@@ -40,6 +43,7 @@ function renderRecommendations(items) {
     return;
   }
   safeItems.forEach((entry) => {
+    if (!currentRecommendationId && entry.recommendation_id) currentRecommendationId = entry.recommendation_id;
     const item = document.createElement("li");
     const title = document.createElement("strong");
     title.textContent = text(entry.title, "Review suggested adjustment");
@@ -50,6 +54,18 @@ function renderRecommendations(items) {
     item.append(title, explanation, authority);
     recommendations.append(item);
   });
+}
+
+async function submitDecision(decision, extra = {}) {
+  decisionStatus.textContent = "Submitting your decision for independent verification.";
+  const response = await fetch("/maintenance/decision", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ decision, recommendation_id: currentRecommendationId, ...extra }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error("maintenance decision rejected");
+  decisionStatus.textContent = text(result.detail, "Your decision was queued.");
 }
 
 function renderHistory(items) {
@@ -98,11 +114,54 @@ byId("wellbeingRefresh")?.addEventListener("click", async () => {
     renderRecommendations(result.recommendations);
     renderHistory(result.maintenance_history);
     renderCommunity(result.community_proposals);
+    currentGrantId = result.autonomy?.grant_id || null;
   } catch {
     status.textContent = "System wellbeing is temporarily unavailable. No maintenance action was taken.";
     renderDimensions([]);
     renderRecommendations([]);
     renderHistory([]);
     renderCommunity([]);
+  }
+});
+
+byId("maintenanceGrant")?.addEventListener("click", async () => {
+  const now = new Date();
+  const expires = new Date(now.getTime() + 30 * 60 * 1000);
+  const grantId = `grant-${now.getTime()}`;
+  try {
+    await submitDecision("grant", {
+      grant_id: grantId,
+      device_id: "local-appliance",
+      action_classes: [byId("maintenanceActionClass").value],
+      not_before: now.toISOString(),
+      expires_at: expires.toISOString(),
+      max_actions: 1,
+      max_downtime_seconds: 120,
+    });
+    currentGrantId = grantId;
+  } catch {
+    decisionStatus.textContent = "The grant was not accepted. No maintenance authority changed.";
+  }
+});
+
+byId("maintenanceDefer")?.addEventListener("click", async () => {
+  try {
+    const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await submitDecision("defer", { defer_until: until });
+  } catch {
+    decisionStatus.textContent = "The suggestion was not deferred.";
+  }
+});
+
+byId("maintenanceRevoke")?.addEventListener("click", async () => {
+  if (!currentGrantId) {
+    decisionStatus.textContent = "No active grant is available to revoke.";
+    return;
+  }
+  try {
+    await submitDecision("revoke", { grant_id: currentGrantId });
+    currentGrantId = null;
+  } catch {
+    decisionStatus.textContent = "The grant was not revoked. Review System wellbeing before retrying.";
   }
 });
