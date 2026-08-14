@@ -17,6 +17,7 @@ except Exception:
     BatonMiddleware = None
 from unison_common.multimodal import CapabilityClient
 from unison_common.redaction import redact_obj
+from incident_expressions import express_incident
 from unison_common.principal_middleware import (
     PrincipalBindingMiddleware,
     get_bound_principal,
@@ -969,6 +970,15 @@ def ingest_event(body: Dict[str, Any] = Body(...)):
     - Legacy envelope: arbitrary JSON; the client composer applies a best-effort mapping.
     """
     envelope = dict(body or {})
+    if envelope.get("type") == "household.incident.v1":
+        payload = envelope.get("payload") if isinstance(envelope.get("payload"), dict) else {}
+        incident = payload.get("incident") if isinstance(payload.get("incident"), dict) else None
+        if incident:
+            payload["expressions"] = {
+                modality: express_incident(incident, modality)
+                for modality in ("visual", "braille", "conversation")
+            }
+            envelope["payload"] = payload
     max_bytes = int(os.getenv("UNISON_RENDERER_MAX_ENVELOPE_BYTES", "0"))
     if max_bytes > 0:
         try:
