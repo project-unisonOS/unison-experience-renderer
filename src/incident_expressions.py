@@ -33,7 +33,7 @@ def express_incident(incident: dict[str, Any], modality: str, *,
         "provenance": incident.get("source_ids", []),
     }
     expression = {
-        "visual": {"layout": "incident-card", "status_text": incident["state"],
+        "visual": {"layout": "incident-panel", "status_text": incident["state"],
                    "non_color_cue": f"{incident['severity']} incident"},
         "braille": {"cells": _plain_summary(semantic), "navigation": "semantic-regions"},
         "conversation": {"speech": _plain_summary(semantic), "turn_position": incident["state"]},
