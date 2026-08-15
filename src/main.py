@@ -19,6 +19,7 @@ from unison_common.multimodal import CapabilityClient
 from unison_common.redaction import redact_obj
 from incident_expressions import express_incident
 from taxonomy_expressions import express_taxonomy_decision
+from resolution_expressions import express_resolution
 from unison_common.principal_middleware import (
     PrincipalBindingMiddleware,
     get_bound_principal,
@@ -1006,6 +1007,14 @@ def taxonomy_expression(body: Dict[str, Any] = Body(...)):
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=f"missing field: {exc.args[0]}") from exc
     except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/v1/resolution/expression")
+def resolution_expression(body: Dict[str, Any] = Body(...)):
+    try:
+        return express_resolution(dict(body["outcome"]), str(body["modality"]))
+    except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
