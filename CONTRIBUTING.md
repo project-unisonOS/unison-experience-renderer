@@ -53,7 +53,7 @@ All contributions — code, documentation, research, or accessibility testing �
 ## Accessibility Commitments
 Unison’s foundation is inclusive design.  
 If you introduce features that affect human interaction — input, display, or policy behavior — confirm that:
-- Keyboard and screen reader use cases are supported.  
+- Native conversational, Braille, visual, and other semantic modality paths are tested independently; blind and visually impaired use must not depend on reading a visual screen.
 - Default color palettes meet contrast ratios.  
 - Audio or visual indicators have redundant cues.
 
