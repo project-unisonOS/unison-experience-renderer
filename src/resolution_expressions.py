@@ -18,3 +18,38 @@ def express_resolution(outcome: dict, modality: str) -> dict:
     }
     return {"schema_version": "resolution-expression.v1", "modality": modality,
             "semantic": semantic, "expression": expressions[modality]}
+
+def express_candidate_review(candidate: dict, modality: str) -> dict:
+    """Compose a candidate review natively without granting executable authority."""
+    if modality not in {"conversation", "braille", "visual"}:
+        raise ValueError("unsupported candidate review modality")
+    semantic = {
+        "candidate_id": candidate["candidate_id"],
+        "reason": candidate["reason"],
+        "proposed_outcome": candidate["proposed_outcome"],
+        "data_and_authority": candidate.get("data_and_authority", []),
+        "scope": candidate.get("scope", "person-local"),
+        "choices": ["accept", "modify", "defer", "reject"],
+        "executable": False,
+    }
+    expressions = {
+        "conversation": {
+            "opening": f"I noticed a repeatable pattern: {semantic['reason']}",
+            "explanation": semantic["proposed_outcome"],
+            "spoken_choices": semantic["choices"],
+            "barge_in": True,
+        },
+        "braille": {
+            "regions": [
+                {"semantic_id": "reason", "text": semantic["reason"]},
+                {"semantic_id": "outcome", "text": semantic["proposed_outcome"]},
+            ],
+            "routing_actions": semantic["choices"],
+        },
+        "visual": {
+            "sections": ["reason", "proposed_outcome", "data_and_authority", "scope"],
+            "controls": semantic["choices"],
+        },
+    }
+    return {"schema_version": "candidate-review-expression.v1", "modality": modality,
+            "semantic": semantic, "expression": expressions[modality]}
