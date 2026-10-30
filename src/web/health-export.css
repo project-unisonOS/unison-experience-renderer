@@ -1,0 +1,20 @@
+:root { color-scheme: dark; font: 100%/1.6 system-ui,sans-serif; background:#101820; color:#f3f6f8; }
+* { box-sizing:border-box; } main { max-width:52rem; margin:2rem auto; padding:0 1.25rem; }
+h1 { font-size:clamp(1.7rem,4vw,2.5rem); line-height:1.2; } h2 { font-size:1.35rem; }
+a { color:#a7e3ff; } button,input { font:inherit; max-width:100%; } button { background:#223b4b; color:#ffffff; border:2px solid #a7e3ff; border-radius:.3rem; padding:.55rem .9rem; margin:.3rem .4rem .3rem 0; cursor:pointer; }
+button:disabled { background:#26343d; color:#cedbe3; cursor:default; } :focus-visible { outline:3px solid #ffd789; outline-offset:4px; }
+label { display:block; margin:.8rem 0; } input[type=file] { display:block; width:100%; } input[type=checkbox] { width:1.2rem; height:1.2rem; }
+section { margin:2rem 0; } article { border-top:1px solid #7e929e; padding:.8rem 0; overflow-wrap:anywhere; } pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+#status { padding:.8rem; border-left:3px solid #a7e3ff; } .eyebrow { color:#b9ccd7; } [hidden] { display:none!important; }
+@media (forced-colors:active) { button { border:2px solid ButtonText; } }
+
+
+body { margin:0; } main { overflow-wrap:anywhere; } button { white-space:normal; overflow-wrap:anywhere; }
+
+@media (forced-colors:active) {
+  :root,body { background:Canvas; color:CanvasText; }
+  .eyebrow { color:CanvasText; }
+  a { color:LinkText; }
+  button,button:disabled { background:ButtonFace; color:ButtonText; border-color:ButtonText; }
+  #status,article { border-color:CanvasText; }
+}

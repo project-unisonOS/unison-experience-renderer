@@ -32,6 +32,7 @@ jobs:
       - name: Install Chromium accessibility runner
         run: |
           npm ci
+          npm run test:health-interactions
           npx playwright install --with-deps chromium
       - name: Run real-browser Phase 1 and Phase 2 accessibility evidence
         env:

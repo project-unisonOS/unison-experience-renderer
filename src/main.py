@@ -1218,3 +1218,43 @@ def _get_cached_profile(person_id: str) -> Dict[str, Any]:
     _context_profile_cache[person_id] = profile
     _context_profile_cache_ts[person_id] = now
     return profile
+
+# A bounded optional experience, separate from the default presence surface.
+@app.post("/health-workflows")
+def health_workflow_start(request: Request, body: dict = Body(...)):
+    return _health_workflow_request(request, "POST", "/v1/health-workflows", body)
+
+
+def _health_workflow_request(request, method, path, body=None):
+    from health_workflow_proxy import proxy
+    from fastapi.responses import JSONResponse
+    if os.getenv("UNISON_SYNTHETIC_HEALTH_WORKFLOW") != "true":
+        raise HTTPException(403, "synthetic workflow disabled")
+    result = proxy(request, method, path, body, os.getenv("UNISON_HEALTH_WORKFLOW_STORAGE_URL", ""),
+                   getattr(app.state, "health_workflow_transport", None))
+    return JSONResponse(result, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
+
+
+@app.api_route("/health-workflows/{wid}", methods=["GET", "DELETE"])
+def health_workflow_read_delete(wid: str, request: Request):
+    import re
+    if not re.fullmatch(r"health_[A-Za-z0-9_-]{20,40}", wid): raise HTTPException(400, "invalid workflow")
+    return _health_workflow_request(request, request.method, "/v1/health-workflows/"+wid)
+
+
+@app.post("/health-workflows/{wid}/{action}")
+def health_workflow_action(wid: str, action: str, request: Request, body: dict = Body(default={})):
+    import re
+    if not re.fullmatch(r"health_[A-Za-z0-9_-]{20,40}", wid) or action not in {"upload", "revoke", "backup", "restore"}:
+        raise HTTPException(400, "invalid workflow action")
+    return _health_workflow_request(request, "POST", "/v1/health-workflows/"+wid+"/"+action, body)
+
+@app.middleware("http")
+async def health_experience_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(("/health-workflows", "/static/health-")):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    return response
