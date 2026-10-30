@@ -11,7 +11,7 @@
 <p><a href="health-sample.json" download>Download a supported synthetic sample</a></p>
 <label for="export-file">Synthetic sleep/activity JSON file (up to 1 MiB)</label><input id="export-file" type="file" accept=".json,application/json" aria-describedby="file-help">
 <p id="file-help">Dates must include the original timezone, sleep is in minutes, and steps are counts. Identical rows are deduplicated; conflicting revisions are rejected. Missing readings stay unknown.</p>
-<label class="consent"><input id="consent" type="checkbox"> I permit this selected synthetic export to be uploaded, retained privately, and used for fact review and a descriptive summary for 24 hours. I can revoke or delete it below.</label>
+<label class="consent"><input id="consent" type="checkbox"> I permit this selected synthetic export to be uploaded and retained privately for fact review and a descriptive summary. Access permission expires after 24 hours; expiration does not delete retained content or backups. I can revoke or delete this import below to remove its current content and saved snapshots.</label>
 <button id="import" type="button">Import with my permission</button><button id="cancel" type="button">Clear selection</button>
 </section>
 <section id="review" hidden aria-labelledby="review-title"><h2 id="review-title" tabindex="-1">Review the extracted facts</h2><p id="review-note"></p><div id="facts"></div><button id="summarize" type="button">Read my summary</button></section>

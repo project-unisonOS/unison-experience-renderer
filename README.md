@@ -55,3 +55,5 @@ keyboard use and source links. Renderer-to-storage transport is in-process in th
 test. Native conversational/Braille composition and participatory accessibility
 qualification remain open. No health content is retained in browser web storage;
 opaque workflow/snapshot IDs are retained within the current session only.
+
+The synthetic export experience serializes requests with disabled controls and an announced busy state. Clear selection does not cancel a submitted import. Visibility changes invalidate late render/upload continuations; already submitted server operations may still complete. Access expires after 24 hours, but retained content and backups require explicit revoke/delete cleanup. Delayed-request regressions run with `npm run test:health-interactions`.
