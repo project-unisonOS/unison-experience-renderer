@@ -57,3 +57,15 @@ qualification remain open. No health content is retained in browser web storage;
 opaque workflow/snapshot IDs are retained within the current session only.
 
 The synthetic export experience serializes requests with disabled controls and an announced busy state. Clear selection does not cancel a submitted import. Visibility changes invalidate late render/upload continuations; already submitted server operations may still complete. Access expires after 24 hours, but retained content and backups require explicit revoke/delete cleanup. Delayed-request regressions run with `npm run test:health-interactions`.
+
+The optional synthetic intent expression at `/static/intent-experience.html`
+connects semantic visual choices and typed screenless commands to the same trusted
+mock state transitions. `/synthetic-intent` is disabled unless
+`UNISON_SYNTHETIC_INTENT=true` and a mock coordinator is explicitly injected by the
+fixture host. It binds the authenticated person, requires delegation scopes in the
+coordinator, and returns no-store responses. No production coordinator or live
+credential provider is configured by this code. The screenless output is text for
+an audio representation, not actual recognition or playback. Mode and opaque
+resource references survive reload; authority terms/repair tickets remain in
+memory and are revalidated on each response. This is a connected synthetic
+prototype, not live account or participant accessibility qualification.
