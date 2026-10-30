@@ -1,0 +1,2 @@
+select { font:inherit; display:block; width:100%; max-width:100%; padding:.4rem; background:#223b4b; color:#fff; border:2px solid #a7e3ff; }
+@media (forced-colors:active) { select { background:Canvas; color:CanvasText; border-color:CanvasText; } }

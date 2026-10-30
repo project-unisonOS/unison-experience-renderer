@@ -1252,9 +1252,14 @@ def health_workflow_action(wid: str, action: str, request: Request, body: dict =
 @app.middleware("http")
 async def health_experience_headers(request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith(("/health-workflows", "/static/health-")):
+    if request.url.path.startswith(("/health-workflows", "/static/health-", "/synthetic-intent", "/static/intent-")):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Pragma"] = "no-cache"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     return response
+
+@app.post('/synthetic-intent')
+def synthetic_intent_interact(request: Request, body: dict = Body(...)):
+    from synthetic_intent_bridge import interact
+    return interact(request, body)
