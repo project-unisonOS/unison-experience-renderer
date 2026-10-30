@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'">
+<title>Synthetic health export · Unison</title><link rel="stylesheet" href="health-export.css"></head>
+<body><main id="main">
+<p class="eyebrow">Unison · Synthetic experience</p><h1>Understand your sleep and activity export</h1>
+<p>This experience accepts the Unison synthetic JSON format only. Do not upload personal records. No model or health recommendation is involved.</p>
+<p id="status" role="status" aria-live="polite" tabindex="-1">Choose a synthetic export to begin. Sign in through the main Unison surface first.</p>
+<section aria-labelledby="import-title"><h2 id="import-title">Choose and permit one export</h2>
+<p><a href="health-sample.json" download>Download a supported synthetic sample</a></p>
+<label for="export-file">Synthetic sleep/activity JSON file (up to 1 MiB)</label><input id="export-file" type="file" accept=".json,application/json" aria-describedby="file-help">
+<p id="file-help">Dates must include the original timezone, sleep is in minutes, and steps are counts. Identical rows are deduplicated; conflicting revisions are rejected. Missing readings stay unknown.</p>
+<label class="consent"><input id="consent" type="checkbox"> I permit this selected synthetic export to be uploaded, retained privately, and used for fact review and a descriptive summary for 24 hours. I can revoke or delete it below.</label>
+<button id="import" type="button">Import with my permission</button><button id="cancel" type="button">Clear selection</button>
+</section>
+<section id="review" hidden aria-labelledby="review-title"><h2 id="review-title" tabindex="-1">Review the extracted facts</h2><p id="review-note"></p><div id="facts"></div><button id="summarize" type="button">Read my summary</button></section>
+<section id="summary" hidden aria-labelledby="summary-title"><h2 id="summary-title" tabindex="-1">Your descriptive summary</h2><div id="summary-text"></div><p>No diagnosis, health significance or treatment conclusion has been assessed.</p></section>
+<section id="controls" hidden aria-labelledby="control-title"><h2 id="control-title">Your permission and recovery</h2>
+<p>Revoke or delete removes this workflow’s current content and saved snapshots. Restoring older data cannot reactivate it while the separate authority ledger is retained. This does not protect against rolling back that ledger or compromising its keys.</p>
+<button id="backup" type="button">Save backup</button><button id="restore" type="button" disabled>Restore saved backup</button><button id="revoke" type="button">Revoke permission</button><button id="delete" type="button">Delete this import</button>
+</section>
+<p><a href="/">Return to Unison</a></p>
+</main><script type="module" src="health-export.js"></script></body></html>
+

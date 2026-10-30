@@ -1,0 +1,40 @@
+{
+  "schema_version": "synthetic-health-export.v1",
+  "synthetic": true,
+  "observations": [
+    {
+      "upstream_id": "sample-sleep_duration",
+      "source": "synthetic-device",
+      "device": "fixture",
+      "method": "daily-aggregate",
+      "metric": "sleep_duration",
+      "kind": "measurement",
+      "value": 420,
+      "unit": "minutes",
+      "source_day": "2026-10-20",
+      "original_timezone": "UTC",
+      "measured_start": "2026-10-20T00:00:00+00:00",
+      "measured_end": "2026-10-20T23:59:00+00:00",
+      "quality": "valid",
+      "missing_reason": null,
+      "revision": 1
+    },
+    {
+      "upstream_id": "sample-steps",
+      "source": "synthetic-device",
+      "device": "fixture",
+      "method": "daily-aggregate",
+      "metric": "steps",
+      "kind": "measurement",
+      "value": null,
+      "unit": "count",
+      "source_day": "2026-10-20",
+      "original_timezone": "UTC",
+      "measured_start": "2026-10-20T00:00:00+00:00",
+      "measured_end": "2026-10-20T23:59:00+00:00",
+      "quality": "missing",
+      "missing_reason": "Device not worn",
+      "revision": 1
+    }
+  ]
+}

@@ -36,3 +36,22 @@ Local docs:
 - `MOTION_GUIDE.md`
 - `ACCESSIBILITY.md`
 - `MIGRATION_NOTES.md`
+
+## Synthetic health export candidate
+
+The optional `/static/health-export.html` experience supports choosing a synthetic
+JSON export, consent before upload, source-linked fact review, a descriptive summary,
+and revoke/delete/backup/restore controls. It uses the existing signed session in
+session storage and requires the storage audience and narrowly scoped workflow
+permissions. It does not provision identities or grant itself authority.
+
+The API is disabled unless `UNISON_SYNTHETIC_HEALTH_WORKFLOW=true`. The configured
+`UNISON_HEALTH_WORKFLOW_STORAGE_URL` must be a literal loopback HTTP origin. This is
+a bounded test topology, not a remote transport or operational deployment claim.
+
+The workspace browser test covers the actual controls with signed identities,
+encrypted temporary storage, mobile/desktop widths, forced colors, enlarged text,
+keyboard use and source links. Renderer-to-storage transport is in-process in that
+test. Native conversational/Braille composition and participatory accessibility
+qualification remain open. No health content is retained in browser web storage;
+opaque workflow/snapshot IDs are retained within the current session only.
